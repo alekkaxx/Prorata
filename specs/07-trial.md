@@ -363,3 +363,32 @@ Description), поэтому нулевая строка легальна и п�
    `trial_convert ghost` (2026-02-01) → ошибка `prorata: convert: unknown plan "ghost"`.
 
 ## Gate
+
+2026-07-23 — **PASS** (architect).
+
+Сверка `rule_trial.go` (6a79c68) со спекой и инвариантами:
+
+- **Фаза 1 (`trialStart`).** Нулевая строка `trial.start` с непустыми RuleID и
+  Description (`<plan>: trial <start> to <end> (free)`), `Amount = 0` — объяснимость
+  бесплатности есть (D2). Гард `st.plan != nil` → `trial: already subscribed` (D5).
+  Период `[ev.At, AddInterval)`, состояние `paid = 0`, `trial = true` (D1). Тексты
+  ошибок и формат дат совпадают со спекой и golden 1–5.
+- **Фаза 2 (`trialConvert`).** Гард `!st.trial` → `convert: no active trial`
+  (ловит и пустое состояние, и платную подписку — D3). Остаток триала сгорает:
+  `paid = plan.Price`, период от `ev.At`, кредитной строки нет (D4). Целевой план —
+  любой известный, единым путём (D8). Строка `convert.charge`.
+- **Эмерджентность (D6).** Промо не сгорает на `trial.start` (`base = 0` →
+  `applyPromo` возвращает строки без изменений, промо остаётся взведённым) и
+  срабатывает на `convert.charge` — подтверждено golden `07-promo-survives-trial`.
+  Кредитный баланс гасится движком (`applyCredit`) единообразно; по D5 старт триала
+  требует чистого состояния, а `st.plan == nil` достижимо только без предшествующего
+  `subscribe`, значит `creditBalance == 0` на входе в триал — взаимодействия нет.
+- **Инварианты.** Кредит ≤ уплаченного: при `paid = 0` кредитовать нечего; цепочка
+  `trial → convert → downgrade` банкует остаток уже оплаченного (`paid = plan.Price`)
+  ≤ paid. `Total == Σ строк` (движок). Идемпотентность — чистые функции.
+  Нулевая строка проходит валидацию движка (проверка только на пустые
+  RuleID/Description, не на нулевой Amount).
+- **Диффы.** Builder-коммит 6a79c68 трогает только `rule_trial.go`.
+- **Покрытие.** Добавлен property-тест `TestTrialChainNeverOverdraws` (коммит уровня
+  architect) на случайные `trial → convert → up/down`: ровно одна нулевая
+  `trial.start`, леджер не овердрафтится, `Total == Σ строк`. `make check` зелёный.
