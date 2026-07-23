@@ -406,6 +406,101 @@ func TestPromoFixedOneShotAndBounded(t *testing.T) {
 	})
 }
 
+// TestTrialChainNeverOverdraws verifies the trial invariants from
+// specs/07-trial.md on arbitrary trial->convert->plan-change chains: a free
+// trial followed by a conversion and then random upgrades and downgrades keeps
+// the ledger honest. Because the trial is free (paid == 0) and D5 forces a clean
+// state, the trial banks no credit; the credit ledger can only ever be fed by
+// the paid periods that follow conversion, so it can never hand out more than
+// what was actually paid. The test asserts the strongest public consequences:
+// exactly one trial.start line exists (the trial opens once), it is always zero
+// (nothing is charged for the trial), every credit.applied line is negative, the
+// sum of all credit.applied magnitudes never exceeds the sum of the positive
+// charges (the ledger never overdraws), and the invoice total equals the sum of
+// its lines.
+func TestTrialChainNeverOverdraws(t *testing.T) {
+	rapid.Check(t, func(t *rapid.T) {
+		catalog := Catalog{
+			"a": {ID: "a", Price: Money(rapid.Int64Range(0, 10_000_00).Draw(t, "priceA")), Interval: IntervalMonth, Currency: "USD"},
+			"b": {ID: "b", Price: Money(rapid.Int64Range(0, 10_000_00).Draw(t, "priceB")), Interval: IntervalMonth, Currency: "USD"},
+			"c": {ID: "c", Price: Money(rapid.Int64Range(0, 10_000_00).Draw(t, "priceC")), Interval: IntervalYear, Currency: "USD"},
+		}
+		ids := []string{"a", "b", "c"}
+
+		at := time.Date(
+			rapid.IntRange(2020, 2030).Draw(t, "year"),
+			time.Month(rapid.IntRange(1, 12).Draw(t, "month")),
+			rapid.IntRange(1, 28).Draw(t, "day"),
+			0, 0, 0, 0, time.UTC,
+		)
+		// A trial opens on a clean state (D5); it is later converted to the same
+		// or a different plan (D8). Conversion may land mid-trial or past its end
+		// (D4) — the offset spans both regimes.
+		trialPlan := ids[rapid.IntRange(0, 2).Draw(t, "trialPlan")]
+		events := []Event{{At: at, Type: EventTrial, PlanID: trialPlan}}
+
+		at = at.AddDate(0, 0, rapid.IntRange(0, 400).Draw(t, "convertGap"))
+		cur := ids[rapid.IntRange(0, 2).Draw(t, "convertPlan")]
+		events = append(events, Event{At: at, Type: EventConvert, PlanID: cur})
+
+		steps := rapid.IntRange(0, 6).Draw(t, "steps")
+		for range steps {
+			// Draw a plan different from the current one to avoid the same-plan
+			// error; upgrade and downgrade are both legal to either plan.
+			next := ids[rapid.IntRange(0, 1).Draw(t, "planPick")]
+			if next == cur {
+				next = ids[2]
+			}
+			typ := EventUpgrade
+			if rapid.Bool().Draw(t, "isDowngrade") {
+				typ = EventDowngrade
+			}
+			at = at.AddDate(0, 0, rapid.IntRange(0, 400).Draw(t, "gapDays"))
+			events = append(events, Event{At: at, Type: typ, PlanID: next})
+			cur = next
+		}
+
+		period := Period{
+			Start: time.Date(2019, 1, 1, 0, 0, 0, 0, time.UTC),
+			End:   time.Date(2035, 1, 1, 0, 0, 0, 0, time.UTC),
+		}
+		inv, err := Compute(catalog, events, period)
+		if err != nil {
+			t.Fatalf("Compute error: %v", err)
+		}
+
+		var lineSum, positiveCharges, appliedMagnitude Money
+		trialLines := 0
+		for _, ln := range inv.Lines {
+			lineSum += ln.Amount
+			if ln.Amount > 0 {
+				positiveCharges += ln.Amount
+			}
+			if ln.RuleID == ruleTrialStart {
+				trialLines++
+				if ln.Amount != 0 {
+					t.Fatalf("trial.start amount %d is not zero", ln.Amount)
+				}
+			}
+			if ln.RuleID == ruleCreditApplied {
+				if ln.Amount >= 0 {
+					t.Fatalf("credit.applied amount %d is not negative", ln.Amount)
+				}
+				appliedMagnitude += -ln.Amount
+			}
+		}
+		if trialLines != 1 {
+			t.Fatalf("got %d trial.start lines, want exactly 1", trialLines)
+		}
+		if appliedMagnitude > positiveCharges {
+			t.Fatalf("applied credit %d exceeds positive charges %d (ledger overdrawn)", appliedMagnitude, positiveCharges)
+		}
+		if lineSum != inv.Total {
+			t.Fatalf("sum of lines %d != invoice total %d", lineSum, inv.Total)
+		}
+	})
+}
+
 // TestAddIntervalProperty verifies the calendar-clamp decision from
 // specs/00-core.md D3: the anchor day never grows, the result is always
 // strictly later, and adding a month lands in the next calendar month.
