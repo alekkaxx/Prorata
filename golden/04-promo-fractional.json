@@ -1,0 +1,22 @@
+{
+  "name": "04-promo-fractional",
+  "catalog": [
+    {"id": "odd-month", "price_cents": 1333, "interval": "month", "currency": "USD"}
+  ],
+  "events": [
+    {"at": "2026-01-01T00:00:00Z", "type": "apply_promo", "bps": 750, "code": "SAVE750"},
+    {"at": "2026-01-01T00:00:00Z", "type": "subscribe", "plan": "odd-month"}
+  ],
+  "period": {
+    "start": "2026-01-01T00:00:00Z",
+    "end": "2026-02-01T00:00:00Z"
+  },
+  "invoice": {
+    "currency": "USD",
+    "lines": [
+      {"rule": "charge.full", "description": "odd-month: full period 2026-01-01 to 2026-02-01", "amount_cents": 1333},
+      {"rule": "promo.percent", "description": "SAVE750: -7.50% off 13.33", "amount_cents": -100}
+    ],
+    "total_cents": 1233
+  }
+}

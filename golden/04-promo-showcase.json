@@ -1,0 +1,25 @@
+{
+  "name": "04-promo-showcase",
+  "catalog": [
+    {"id": "pro-month", "price_cents": 2000, "interval": "month", "currency": "USD"},
+    {"id": "business-year", "price_cents": 48000, "interval": "year", "currency": "USD"}
+  ],
+  "events": [
+    {"at": "2026-01-01T00:00:00Z", "type": "subscribe", "plan": "pro-month"},
+    {"at": "2026-01-13T00:00:00Z", "type": "apply_promo", "bps": 2000, "code": "WELCOME20"},
+    {"at": "2026-01-13T00:00:00Z", "type": "upgrade", "plan": "business-year"}
+  ],
+  "period": {
+    "start": "2026-01-13T00:00:00Z",
+    "end": "2027-01-13T00:00:00Z"
+  },
+  "invoice": {
+    "currency": "USD",
+    "lines": [
+      {"rule": "prorate.credit", "description": "pro-month: unused 19/31 days 2026-01-13 to 2026-02-01", "amount_cents": -1226},
+      {"rule": "prorate.charge", "description": "business-year: full period 2026-01-13 to 2027-01-13", "amount_cents": 48000},
+      {"rule": "promo.percent", "description": "WELCOME20: -20% off 480.00", "amount_cents": -9600}
+    ],
+    "total_cents": 37174
+  }
+}
