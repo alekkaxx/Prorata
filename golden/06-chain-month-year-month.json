@@ -1,0 +1,25 @@
+{
+  "name": "06-chain-month-year-month",
+  "catalog": [
+    {"id": "pro-month", "price_cents": 2000, "interval": "month", "currency": "USD"},
+    {"id": "team-month", "price_cents": 5000, "interval": "month", "currency": "USD"},
+    {"id": "business-year", "price_cents": 48000, "interval": "year", "currency": "USD"}
+  ],
+  "events": [
+    {"at": "2024-01-15T00:00:00Z", "type": "subscribe", "plan": "pro-month"},
+    {"at": "2024-02-05T00:00:00Z", "type": "upgrade", "plan": "business-year"},
+    {"at": "2024-08-05T00:00:00Z", "type": "downgrade", "plan": "pro-month"}
+  ],
+  "period": {"start": "2024-01-01T00:00:00Z", "end": "2025-06-01T00:00:00Z"},
+  "invoice": {
+    "currency": "USD",
+    "lines": [
+      {"rule": "charge.full", "description": "pro-month: full period 2024-01-15 to 2024-02-15", "amount_cents": 2000},
+      {"rule": "prorate.credit", "description": "pro-month: unused 10/31 days 2024-02-05 to 2024-02-15", "amount_cents": -645},
+      {"rule": "prorate.charge", "description": "business-year: full period 2024-02-05 to 2025-02-05", "amount_cents": 48000},
+      {"rule": "downgrade.charge", "description": "pro-month: full period 2024-08-05 to 2024-09-05", "amount_cents": 2000},
+      {"rule": "credit.applied", "description": "credit balance applied", "amount_cents": -2000}
+    ],
+    "total_cents": 49355
+  }
+}

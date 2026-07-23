@@ -1,0 +1,30 @@
+{
+  "name": "06-big-credit-many-charges",
+  "catalog": [
+    {"id": "pro-month", "price_cents": 2000, "interval": "month", "currency": "USD"},
+    {"id": "team-month", "price_cents": 5000, "interval": "month", "currency": "USD"},
+    {"id": "business-year", "price_cents": 48000, "interval": "year", "currency": "USD"}
+  ],
+  "events": [
+    {"at": "2026-01-01T00:00:00Z", "type": "subscribe", "plan": "business-year"},
+    {"at": "2026-01-01T00:00:00Z", "type": "downgrade", "plan": "pro-month"},
+    {"at": "2026-01-15T00:00:00Z", "type": "upgrade", "plan": "team-month"},
+    {"at": "2026-01-20T00:00:00Z", "type": "upgrade", "plan": "business-year"}
+  ],
+  "period": {"start": "2026-01-01T00:00:00Z", "end": "2027-06-01T00:00:00Z"},
+  "invoice": {
+    "currency": "USD",
+    "lines": [
+      {"rule": "charge.full", "description": "business-year: full period 2026-01-01 to 2027-01-01", "amount_cents": 48000},
+      {"rule": "downgrade.charge", "description": "pro-month: full period 2026-01-01 to 2026-02-01", "amount_cents": 2000},
+      {"rule": "credit.applied", "description": "credit balance applied", "amount_cents": -2000},
+      {"rule": "prorate.credit", "description": "pro-month: unused 17/31 days 2026-01-15 to 2026-02-01", "amount_cents": -1097},
+      {"rule": "prorate.charge", "description": "team-month: full period 2026-01-15 to 2026-02-15", "amount_cents": 5000},
+      {"rule": "credit.applied", "description": "credit balance applied", "amount_cents": -3903},
+      {"rule": "prorate.credit", "description": "team-month: unused 26/31 days 2026-01-20 to 2026-02-15", "amount_cents": -4194},
+      {"rule": "prorate.charge", "description": "business-year: full period 2026-01-20 to 2027-01-20", "amount_cents": 48000},
+      {"rule": "credit.applied", "description": "credit balance applied", "amount_cents": -42097}
+    ],
+    "total_cents": 49709
+  }
+}

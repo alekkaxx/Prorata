@@ -1,0 +1,22 @@
+{
+  "name": "06-year-anchor-feb29",
+  "catalog": [
+    {"id": "pro-month", "price_cents": 2000, "interval": "month", "currency": "USD"},
+    {"id": "team-month", "price_cents": 5000, "interval": "month", "currency": "USD"},
+    {"id": "business-year", "price_cents": 48000, "interval": "year", "currency": "USD"}
+  ],
+  "events": [
+    {"at": "2024-02-29T00:00:00Z", "type": "subscribe", "plan": "business-year"},
+    {"at": "2024-08-29T00:00:00Z", "type": "downgrade", "plan": "pro-month"}
+  ],
+  "period": {"start": "2024-01-01T00:00:00Z", "end": "2025-06-01T00:00:00Z"},
+  "invoice": {
+    "currency": "USD",
+    "lines": [
+      {"rule": "charge.full", "description": "business-year: full period 2024-02-29 to 2025-02-28", "amount_cents": 48000},
+      {"rule": "downgrade.charge", "description": "pro-month: full period 2024-08-29 to 2024-09-29", "amount_cents": 2000},
+      {"rule": "credit.applied", "description": "credit balance applied", "amount_cents": -2000}
+    ],
+    "total_cents": 48000
+  }
+}

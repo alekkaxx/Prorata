@@ -1,0 +1,22 @@
+{
+  "name": "06-month-to-year",
+  "catalog": [
+    {"id": "pro-month", "price_cents": 2000, "interval": "month", "currency": "USD"},
+    {"id": "team-month", "price_cents": 5000, "interval": "month", "currency": "USD"},
+    {"id": "business-year", "price_cents": 48000, "interval": "year", "currency": "USD"}
+  ],
+  "events": [
+    {"at": "2024-01-20T00:00:00Z", "type": "subscribe", "plan": "pro-month"},
+    {"at": "2024-02-05T00:00:00Z", "type": "upgrade", "plan": "business-year"}
+  ],
+  "period": {"start": "2024-01-01T00:00:00Z", "end": "2025-06-01T00:00:00Z"},
+  "invoice": {
+    "currency": "USD",
+    "lines": [
+      {"rule": "charge.full", "description": "pro-month: full period 2024-01-20 to 2024-02-20", "amount_cents": 2000},
+      {"rule": "prorate.credit", "description": "pro-month: unused 15/31 days 2024-02-05 to 2024-02-20", "amount_cents": -968},
+      {"rule": "prorate.charge", "description": "business-year: full period 2024-02-05 to 2025-02-05", "amount_cents": 48000}
+    ],
+    "total_cents": 49032
+  }
+}
