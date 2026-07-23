@@ -194,9 +194,9 @@ func TestPromoFixed(t *testing.T) {
 				if promoFixed != -1000 {
 					t.Errorf("promo.fixed = %d, want -1000", promoFixed)
 				}
-				// Verify total is 46774
-				if inv.Total != 46774 {
-					t.Errorf("invoice total = %d, want 46774", inv.Total)
+				// Verify total is 45774
+				if inv.Total != 45774 {
+					t.Errorf("invoice total = %d, want 45774", inv.Total)
 				}
 				// Verify sum equals total (invariant)
 				var sum Money

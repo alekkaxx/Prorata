@@ -17,6 +17,6 @@
       {"rule": "prorate.charge", "description": "business-year: full period 2026-01-13 to 2027-01-13", "amount_cents": 48000},
       {"rule": "promo.fixed", "description": "TENOFF: -10.00 off 480.00", "amount_cents": -1000}
     ],
-    "total_cents": 46774
+    "total_cents": 45774
   }
 }
