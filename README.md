@@ -15,3 +15,4 @@
 | interval-switch | `prorate.credit`, `prorate.charge`, `downgrade.charge`, `credit.applied` | `upgrade`, `downgrade` | Переход между месячным и годовым интервалами: кредит/банк остатка + списание нового плана | mechanic | 1 | [specs/06-interval-switch.md](specs/06-interval-switch.md) |
 | trial | `trial.start`, `convert.charge` | `trial_start`, `trial_convert` | Бесплатный триал нулевой строкой с объяснением + явная конверсия в платный план, остаток триала сгорает | builder | 1 | [specs/07-trial.md](specs/07-trial.md) |
 | refund | `refund.full`, `refund.prorated`, `refund.credit` | `refund` | Три политики возврата на базисе фактического кэша: полный / пропорциональный по дням / в кредитный баланс | builder | 1 | [specs/08-refund.md](specs/08-refund.md) |
+| vat | `vat.standard` | `set_vat` | VAT поверх нетто, округление по строкам (ловушка с копейкой) | builder (sonnet) | 1 | [specs/09-vat.md](specs/09-vat.md) |
