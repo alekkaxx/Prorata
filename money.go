@@ -87,6 +87,16 @@ func (m Money) Percent(bps int64) Money {
 	return Money(q)
 }
 
+// validateBps checks that a basis-point rate fits the [0,10000] scale shared
+// by percentage promos and VAT, reporting the error under the named
+// operation.
+func validateBps(bps int64, op string) error {
+	if bps < 0 || bps > 10000 {
+		return fmt.Errorf("prorata: %s: bps %d out of range [0,10000]", op, bps)
+	}
+	return nil
+}
+
 // formatPercent renders basis points as a human percentage for promo line
 // descriptions: whole percents print without a fraction ("20"), sub-percent
 // precision prints two decimals ("7.50"). Only non-negative bps occur (promos

@@ -65,6 +65,53 @@ type state struct {
 	graceHeldCash Money
 }
 
+// openPeriod starts a fresh billing period on plan at the given time: it
+// computes the period end one billing interval ahead and records the plan
+// price as both the nominal (paid) and cash (cashPaid) basis. Every rule that
+// opens a period goes through this method so the paid/cashPaid pair can never
+// drift apart; a rule that collects nothing (trial) explicitly zeroes the pair
+// afterwards.
+func (st *state) openPeriod(plan Plan, at time.Time) (time.Time, error) {
+	end, err := AddInterval(at, plan.Interval)
+	if err != nil {
+		return time.Time{}, err
+	}
+	st.plan = &plan
+	st.periodStart = at
+	st.periodEnd = end
+	st.paid = plan.Price
+	st.cashPaid = plan.Price
+	return end, nil
+}
+
+// teardown closes the subscription: the plan, period, paid bases and phase
+// flags are cleared, ending access, while the engine ledger — creditBalance,
+// any armed promo, the standing VAT rate — is left untouched, since it
+// reflects money already paid independent of the period being closed.
+// Clearing the grace flag here keeps the "grace implies plan != nil"
+// invariant, so a later resubscribe starts clean (see specs/08-refund.md D5,
+// specs/10-grace.md D6).
+func (st *state) teardown() {
+	st.plan = nil
+	st.periodStart = time.Time{}
+	st.periodEnd = time.Time{}
+	st.paid = 0
+	st.cashPaid = 0
+	st.trial = false
+	st.grace = false
+	st.graceHeldCash = 0
+}
+
+// reduceCash lowers cashPaid by an engine-applied reduction of the current
+// charge, clamped at zero. Every hook that shrinks what the customer actually
+// pays (promo discounts, credit draw-down) must route through this method:
+// cashPaid is the refund basis, and a hook that forgot to reduce it would let
+// a later refund hand back cash that was never collected
+// (see specs/08-refund.md D3).
+func (st *state) reduceCash(applied Money) {
+	st.cashPaid = max(0, st.cashPaid-applied)
+}
+
 // promoKind distinguishes the two one-shot promo flavors a pendingPromo can
 // hold. It is only meaningful while armed is true; the zero value coincides
 // with promoPercent, which is harmless because a disarmed promo is never read.
@@ -126,6 +173,21 @@ const rulePromoFixed RuleID = "promo.fixed"
 // not by an event rule: the rate is core ledger state (state.vatBps), so any
 // charging rule's output is taxed uniformly (see specs/09-vat.md).
 const ruleVATStandard RuleID = "vat.standard"
+
+// fullPeriodLine builds the standard full-price charge line every rule that
+// opens a paid period emits: the plan's price for [start, end), explained
+// with the plan ID and the period bounds. The RuleID is supplied by the
+// emitting rule so the line still names the rule that produced it.
+func fullPeriodLine(id RuleID, plan Plan, start, end time.Time) Line {
+	return Line{
+		RuleID: id,
+		Description: fmt.Sprintf(
+			"%s: full period %s to %s",
+			plan.ID, formatDay(start), formatDay(end),
+		),
+		Amount: plan.Price,
+	}
+}
 
 // ruleFunc applies one event to the subscription state and returns the
 // invoice lines the event produces, if any.
@@ -217,7 +279,7 @@ func applyCredit(st *state, lines []Line) []Line {
 	}
 	applied := min(net, st.creditBalance)
 	st.creditBalance -= applied
-	st.cashPaid = max(0, st.cashPaid-applied)
+	st.reduceCash(applied)
 	return append(lines, Line{
 		RuleID:      ruleCreditApplied,
 		Description: creditAppliedDescription,
@@ -258,11 +320,13 @@ func applyPromo(st *state, lines []Line) []Line {
 	st.promo = pendingPromo{}
 	if p.kind == promoFixed {
 		applied := min(p.amount, base)
-		st.cashPaid = max(0, st.cashPaid-applied)
-		desc := fmt.Sprintf("%s: -%s off %s", p.code, applied.String(), base.String())
+		st.reduceCash(applied)
+		var desc string
 		if p.amount > base {
 			desc = fmt.Sprintf("%s: -%s off %s (capped from %s)",
 				p.code, applied.String(), base.String(), p.amount.String())
+		} else {
+			desc = fmt.Sprintf("%s: -%s off %s", p.code, applied.String(), base.String())
 		}
 		return append(lines, Line{
 			RuleID:      rulePromoFixed,
@@ -271,7 +335,7 @@ func applyPromo(st *state, lines []Line) []Line {
 		})
 	}
 	applied := base.Percent(p.bps)
-	st.cashPaid = max(0, st.cashPaid-applied)
+	st.reduceCash(applied)
 	return append(lines, Line{
 		RuleID: rulePromoPercent,
 		Description: fmt.Sprintf(

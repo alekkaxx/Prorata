@@ -1,7 +1,5 @@
 package prorata
 
-import "fmt"
-
 // init registers the VAT-arming rule for EventSetVAT.
 func init() {
 	registerRule(EventSetVAT, armVAT)
@@ -22,8 +20,8 @@ func init() {
 // emitted by the engine's applyVAT hook once a taxable positive net charge
 // appears.
 func armVAT(st *state, c Catalog, ev Event) ([]Line, error) {
-	if ev.Bps < 0 || ev.Bps > 10000 {
-		return nil, fmt.Errorf("prorata: vat: bps %d out of range [0,10000]", ev.Bps)
+	if err := validateBps(ev.Bps, "vat"); err != nil {
+		return nil, err
 	}
 
 	st.vatBps = ev.Bps

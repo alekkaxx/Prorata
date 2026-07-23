@@ -20,34 +20,17 @@ func init() {
 // inside the period requested from Compute; the engine decides whether the
 // returned line is included in the invoice.
 func chargeFull(st *state, c Catalog, ev Event) ([]Line, error) {
-	plan, ok := c[ev.PlanID]
-	if !ok {
-		return nil, fmt.Errorf("prorata: subscribe: unknown plan %q", ev.PlanID)
+	plan, err := lookupPlan(c, ev.PlanID, "subscribe")
+	if err != nil {
+		return nil, err
 	}
 	if st.plan != nil {
 		return nil, fmt.Errorf("prorata: subscribe: already subscribed")
 	}
 
-	end, err := AddInterval(ev.At, plan.Interval)
+	end, err := st.openPeriod(plan, ev.At)
 	if err != nil {
 		return nil, err
 	}
-
-	st.plan = &plan
-	st.periodStart = ev.At
-	st.periodEnd = end
-	st.paid = plan.Price
-	st.cashPaid = plan.Price
-
-	line := Line{
-		RuleID: ruleFullCharge,
-		Description: fmt.Sprintf(
-			"%s: full period %s to %s",
-			plan.ID,
-			ev.At.UTC().Format("2006-01-02"),
-			end.UTC().Format("2006-01-02"),
-		),
-		Amount: plan.Price,
-	}
-	return []Line{line}, nil
+	return []Line{fullPeriodLine(ruleFullCharge, plan, ev.At, end)}, nil
 }

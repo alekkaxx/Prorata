@@ -28,9 +28,9 @@ func prorateUpgrade(st *state, c Catalog, ev Event) ([]Line, error) {
 	if st.plan == nil {
 		return nil, fmt.Errorf("prorata: upgrade: no active subscription")
 	}
-	newPlan, ok := c[ev.PlanID]
-	if !ok {
-		return nil, fmt.Errorf("prorata: upgrade: unknown plan %q", ev.PlanID)
+	newPlan, err := lookupPlan(c, ev.PlanID, "upgrade")
+	if err != nil {
+		return nil, err
 	}
 	if st.plan.ID == ev.PlanID {
 		return nil, fmt.Errorf("prorata: upgrade: already on plan %q", ev.PlanID)
@@ -38,48 +38,25 @@ func prorateUpgrade(st *state, c Catalog, ev Event) ([]Line, error) {
 
 	oldPlan := st.plan
 	oldPeriodEnd := st.periodEnd
-	total := Period{Start: st.periodStart, End: oldPeriodEnd}.Days()
-	rem := max(Period{Start: ev.At, End: oldPeriodEnd}.Days(), 0)
-	used := total - rem
-
-	parts, err := st.paid.Allocate([]int64{int64(used), int64(rem)})
-	if err != nil {
-		return nil, err
-	}
-	credit := parts[1]
-
-	newEnd, err := AddInterval(ev.At, newPlan.Interval)
+	credit, rem, total, err := unusedShare(
+		st.paid, Period{Start: st.periodStart, End: oldPeriodEnd}, ev.At)
 	if err != nil {
 		return nil, err
 	}
 
-	st.plan = &newPlan
-	st.periodStart = ev.At
-	st.periodEnd = newEnd
-	st.paid = newPlan.Price
-	st.cashPaid = newPlan.Price
+	newEnd, err := st.openPeriod(newPlan, ev.At)
+	if err != nil {
+		return nil, err
+	}
 
 	creditLine := Line{
 		RuleID: ruleProrateCredit,
 		Description: fmt.Sprintf(
 			"%s: unused %d/%d days %s to %s",
-			oldPlan.ID,
-			rem,
-			total,
-			ev.At.UTC().Format("2006-01-02"),
-			oldPeriodEnd.UTC().Format("2006-01-02"),
+			oldPlan.ID, rem, total,
+			formatDay(ev.At), formatDay(oldPeriodEnd),
 		),
 		Amount: -credit,
 	}
-	chargeLine := Line{
-		RuleID: ruleProrateCharge,
-		Description: fmt.Sprintf(
-			"%s: full period %s to %s",
-			newPlan.ID,
-			ev.At.UTC().Format("2006-01-02"),
-			newEnd.UTC().Format("2006-01-02"),
-		),
-		Amount: newPlan.Price,
-	}
-	return []Line{creditLine, chargeLine}, nil
+	return []Line{creditLine, fullPeriodLine(ruleProrateCharge, newPlan, ev.At, newEnd)}, nil
 }

@@ -1,9 +1,6 @@
 package prorata
 
-import (
-	"fmt"
-	"time"
-)
+import "fmt"
 
 // ruleGraceStart is the RuleID for the zero-amount line emitted when
 // EventPaymentFailed opens a grace period on an active subscription.
@@ -52,8 +49,8 @@ func gracePaymentFailed(st *state, c Catalog, ev Event) ([]Line, error) {
 	if st.grace {
 		return nil, fmt.Errorf("prorata: grace: already in grace")
 	}
-	if _, ok := c[ev.PlanID]; !ok {
-		return nil, fmt.Errorf("prorata: grace: unknown plan %q", ev.PlanID)
+	if _, err := lookupPlan(c, ev.PlanID, "grace"); err != nil {
+		return nil, err
 	}
 
 	st.graceHeldCash = st.cashPaid
@@ -65,8 +62,7 @@ func gracePaymentFailed(st *state, c Catalog, ev Event) ([]Line, error) {
 		RuleID: ruleGraceStart,
 		Description: fmt.Sprintf(
 			"%s: payment failed %s, access retained",
-			st.plan.ID,
-			ev.At.UTC().Format("2006-01-02"),
+			st.plan.ID, formatDay(ev.At),
 		),
 		Amount: 0,
 	}
@@ -85,8 +81,8 @@ func graceRecover(st *state, c Catalog, ev Event) ([]Line, error) {
 	if !st.grace {
 		return nil, fmt.Errorf("prorata: grace: no grace in progress")
 	}
-	if _, ok := c[ev.PlanID]; !ok {
-		return nil, fmt.Errorf("prorata: grace: unknown plan %q", ev.PlanID)
+	if _, err := lookupPlan(c, ev.PlanID, "grace"); err != nil {
+		return nil, err
 	}
 
 	st.paid = st.plan.Price
@@ -98,8 +94,7 @@ func graceRecover(st *state, c Catalog, ev Event) ([]Line, error) {
 		RuleID: ruleGraceRecover,
 		Description: fmt.Sprintf(
 			"%s: payment recovered %s, subscription continues",
-			st.plan.ID,
-			ev.At.UTC().Format("2006-01-02"),
+			st.plan.ID, formatDay(ev.At),
 		),
 		Amount: 0,
 	}
@@ -120,27 +115,18 @@ func graceExpire(st *state, c Catalog, ev Event) ([]Line, error) {
 	if !st.grace {
 		return nil, fmt.Errorf("prorata: grace: no grace in progress")
 	}
-	if _, ok := c[ev.PlanID]; !ok {
-		return nil, fmt.Errorf("prorata: grace: unknown plan %q", ev.PlanID)
+	if _, err := lookupPlan(c, ev.PlanID, "grace"); err != nil {
+		return nil, err
 	}
 
 	planID := st.plan.ID
-
-	st.plan = nil
-	st.periodStart = time.Time{}
-	st.periodEnd = time.Time{}
-	st.paid = 0
-	st.cashPaid = 0
-	st.trial = false
-	st.grace = false
-	st.graceHeldCash = 0
+	st.teardown()
 
 	line := Line{
 		RuleID: ruleGraceExpire,
 		Description: fmt.Sprintf(
 			"%s: grace expired %s, access ended for non-payment",
-			planID,
-			ev.At.UTC().Format("2006-01-02"),
+			planID, formatDay(ev.At),
 		),
 		Amount: 0,
 	}

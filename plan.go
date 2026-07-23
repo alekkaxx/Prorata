@@ -26,6 +26,16 @@ type Plan struct {
 // All plans in a catalog must share one currency (see specs/00-core.md, D5).
 type Catalog map[string]Plan
 
+// lookupPlan resolves a plan ID against the catalog for the named operation,
+// with the uniform "unknown plan" error every rule reports.
+func lookupPlan(c Catalog, id, op string) (Plan, error) {
+	p, ok := c[id]
+	if !ok {
+		return Plan{}, fmt.Errorf("prorata: %s: unknown plan %q", op, id)
+	}
+	return p, nil
+}
+
 // validate checks catalog integrity: key/ID agreement, known intervals,
 // non-negative prices and a single currency across all plans.
 func (c Catalog) validate() error {

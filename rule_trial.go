@@ -29,22 +29,20 @@ func init() {
 // Description, so the invoice explains why the period is free rather than
 // silently omitting the period (see specs/07-trial.md, D2).
 func trialStart(st *state, c Catalog, ev Event) ([]Line, error) {
-	plan, ok := c[ev.PlanID]
-	if !ok {
-		return nil, fmt.Errorf("prorata: trial: unknown plan %q", ev.PlanID)
+	plan, err := lookupPlan(c, ev.PlanID, "trial")
+	if err != nil {
+		return nil, err
 	}
 	if st.plan != nil {
 		return nil, fmt.Errorf("prorata: trial: already subscribed")
 	}
 
-	end, err := AddInterval(ev.At, plan.Interval)
+	end, err := st.openPeriod(plan, ev.At)
 	if err != nil {
 		return nil, err
 	}
-
-	st.plan = &plan
-	st.periodStart = ev.At
-	st.periodEnd = end
+	// A trial opens the same period shape as a paid subscription but collects
+	// nothing, so the paid bases openPeriod recorded are zeroed.
 	st.paid = 0
 	st.cashPaid = 0
 	st.trial = true
@@ -53,9 +51,7 @@ func trialStart(st *state, c Catalog, ev Event) ([]Line, error) {
 		RuleID: ruleTrialStart,
 		Description: fmt.Sprintf(
 			"%s: trial %s to %s (free)",
-			plan.ID,
-			ev.At.UTC().Format("2006-01-02"),
-			end.UTC().Format("2006-01-02"),
+			plan.ID, formatDay(ev.At), formatDay(end),
 		),
 		Amount: 0,
 	}
@@ -77,32 +73,16 @@ func trialConvert(st *state, c Catalog, ev Event) ([]Line, error) {
 	if !st.trial {
 		return nil, fmt.Errorf("prorata: convert: no active trial")
 	}
-	plan, ok := c[ev.PlanID]
-	if !ok {
-		return nil, fmt.Errorf("prorata: convert: unknown plan %q", ev.PlanID)
-	}
-
-	end, err := AddInterval(ev.At, plan.Interval)
+	plan, err := lookupPlan(c, ev.PlanID, "convert")
 	if err != nil {
 		return nil, err
 	}
 
-	st.plan = &plan
-	st.periodStart = ev.At
-	st.periodEnd = end
-	st.paid = plan.Price
-	st.cashPaid = plan.Price
+	end, err := st.openPeriod(plan, ev.At)
+	if err != nil {
+		return nil, err
+	}
 	st.trial = false
 
-	line := Line{
-		RuleID: ruleConvertCharge,
-		Description: fmt.Sprintf(
-			"%s: full period %s to %s",
-			plan.ID,
-			ev.At.UTC().Format("2006-01-02"),
-			end.UTC().Format("2006-01-02"),
-		),
-		Amount: plan.Price,
-	}
-	return []Line{line}, nil
+	return []Line{fullPeriodLine(ruleConvertCharge, plan, ev.At, end)}, nil
 }

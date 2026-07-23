@@ -1,9 +1,6 @@
 package prorata
 
-import (
-	"fmt"
-	"time"
-)
+import "fmt"
 
 // ruleRefundFull is the RuleID for the unconditional cash-refund line
 // produced by RefundFull: the entire cash actually paid for the current
@@ -49,24 +46,11 @@ func refundSubscription(st *state, c Catalog, ev Event) ([]Line, error) {
 	if st.plan == nil {
 		return nil, fmt.Errorf("prorata: refund: no active subscription")
 	}
-	if _, ok := c[ev.PlanID]; !ok {
-		return nil, fmt.Errorf("prorata: refund: unknown plan %q", ev.PlanID)
-	}
-
-	planID := st.plan.ID
-	periodStart := st.periodStart
-	periodEnd := st.periodEnd
-	cashPaid := st.cashPaid
-
-	total := Period{Start: periodStart, End: periodEnd}.Days()
-	rem := max(Period{Start: ev.At, End: periodEnd}.Days(), 0)
-	used := total - rem
-
-	parts, err := cashPaid.Allocate([]int64{int64(used), int64(rem)})
-	if err != nil {
+	if _, err := lookupPlan(c, ev.PlanID, "refund"); err != nil {
 		return nil, err
 	}
-	unused := parts[1]
+
+	period := Period{Start: st.periodStart, End: st.periodEnd}
 
 	var line Line
 	switch ev.Policy {
@@ -75,32 +59,36 @@ func refundSubscription(st *state, c Catalog, ev Event) ([]Line, error) {
 			RuleID: ruleRefundFull,
 			Description: fmt.Sprintf(
 				"%s: full refund %s to %s",
-				planID,
-				periodStart.UTC().Format("2006-01-02"),
-				periodEnd.UTC().Format("2006-01-02"),
+				st.plan.ID, formatDay(period.Start), formatDay(period.End),
 			),
-			Amount: -cashPaid,
+			Amount: -st.cashPaid,
 		}
 	case RefundProrated:
+		unused, rem, total, err := unusedShare(st.cashPaid, period, ev.At)
+		if err != nil {
+			return nil, err
+		}
 		line = Line{
 			RuleID: ruleRefundProrated,
 			Description: fmt.Sprintf(
 				"%s: refund unused %d/%d days %s to %s",
-				planID, rem, total,
-				ev.At.UTC().Format("2006-01-02"),
-				periodEnd.UTC().Format("2006-01-02"),
+				st.plan.ID, rem, total,
+				formatDay(ev.At), formatDay(period.End),
 			),
 			Amount: -unused,
 		}
 	case RefundCredit:
+		unused, rem, total, err := unusedShare(st.cashPaid, period, ev.At)
+		if err != nil {
+			return nil, err
+		}
 		st.creditBalance += unused
 		line = Line{
 			RuleID: ruleRefundCredit,
 			Description: fmt.Sprintf(
 				"%s: credit %s for unused %d/%d days %s to %s",
-				planID, unused.String(), rem, total,
-				ev.At.UTC().Format("2006-01-02"),
-				periodEnd.UTC().Format("2006-01-02"),
+				st.plan.ID, unused.String(), rem, total,
+				formatDay(ev.At), formatDay(period.End),
 			),
 			Amount: 0,
 		}
@@ -108,17 +96,6 @@ func refundSubscription(st *state, c Catalog, ev Event) ([]Line, error) {
 		return nil, fmt.Errorf("prorata: refund: unknown policy %q", ev.Policy)
 	}
 
-	st.plan = nil
-	st.periodStart = time.Time{}
-	st.periodEnd = time.Time{}
-	st.paid = 0
-	st.cashPaid = 0
-	st.trial = false
-	// A refund during an open grace period tears the subscription down as well;
-	// clearing the grace flag keeps the "grace implies plan != nil" invariant so a
-	// later resubscribe starts clean (see specs/10-grace.md).
-	st.grace = false
-	st.graceHeldCash = 0
-
+	st.teardown()
 	return []Line{line}, nil
 }

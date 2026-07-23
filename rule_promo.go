@@ -44,8 +44,8 @@ func armPromo(st *state, c Catalog, ev Event) ([]Line, error) {
 		}
 		next = pendingPromo{armed: true, kind: promoFixed, amount: ev.AmountCents, code: ev.Code}
 	} else {
-		if ev.Bps < 0 || ev.Bps > 10000 {
-			return nil, fmt.Errorf("prorata: promo: bps %d out of range [0,10000]", ev.Bps)
+		if err := validateBps(ev.Bps, "promo"); err != nil {
+			return nil, err
 		}
 		next = pendingPromo{armed: true, kind: promoPercent, bps: ev.Bps, code: ev.Code}
 	}
