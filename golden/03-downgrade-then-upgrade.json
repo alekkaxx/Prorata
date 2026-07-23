@@ -1,0 +1,27 @@
+{
+  "name": "03-downgrade-then-upgrade",
+  "catalog": [
+    {"id": "pro-month", "price_cents": 2000, "interval": "month", "currency": "USD"},
+    {"id": "business-year", "price_cents": 48000, "interval": "year", "currency": "USD"}
+  ],
+  "events": [
+    {"at": "2026-01-01T00:00:00Z", "type": "subscribe", "plan": "business-year"},
+    {"at": "2026-01-13T00:00:00Z", "type": "downgrade", "plan": "pro-month"},
+    {"at": "2026-01-20T00:00:00Z", "type": "upgrade", "plan": "business-year"}
+  ],
+  "period": {
+    "start": "2026-01-13T00:00:00Z",
+    "end": "2027-06-01T00:00:00Z"
+  },
+  "invoice": {
+    "currency": "USD",
+    "lines": [
+      {"rule": "downgrade.charge", "description": "pro-month: full period 2026-01-13 to 2026-02-13", "amount_cents": 2000},
+      {"rule": "credit.applied", "description": "credit balance applied", "amount_cents": -2000},
+      {"rule": "prorate.credit", "description": "pro-month: unused 24/31 days 2026-01-20 to 2026-02-13", "amount_cents": -1548},
+      {"rule": "prorate.charge", "description": "business-year: full period 2026-01-20 to 2027-01-20", "amount_cents": 48000},
+      {"rule": "credit.applied", "description": "credit balance applied", "amount_cents": -44422}
+    ],
+    "total_cents": 2030
+  }
+}

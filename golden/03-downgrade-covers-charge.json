@@ -1,0 +1,23 @@
+{
+  "name": "03-downgrade-covers-charge",
+  "catalog": [
+    {"id": "pro-month", "price_cents": 2000, "interval": "month", "currency": "USD"},
+    {"id": "team-month", "price_cents": 5000, "interval": "month", "currency": "USD"}
+  ],
+  "events": [
+    {"at": "2026-01-01T00:00:00Z", "type": "subscribe", "plan": "team-month"},
+    {"at": "2026-01-13T00:00:00Z", "type": "downgrade", "plan": "pro-month"}
+  ],
+  "period": {
+    "start": "2026-01-13T00:00:00Z",
+    "end": "2026-03-01T00:00:00Z"
+  },
+  "invoice": {
+    "currency": "USD",
+    "lines": [
+      {"rule": "downgrade.charge", "description": "pro-month: full period 2026-01-13 to 2026-02-13", "amount_cents": 2000},
+      {"rule": "credit.applied", "description": "credit balance applied", "amount_cents": -2000}
+    ],
+    "total_cents": 0
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "name": "03-downgrade-first-day",
+  "catalog": [
+    {"id": "pro-month", "price_cents": 2000, "interval": "month", "currency": "USD"},
+    {"id": "team-month", "price_cents": 5000, "interval": "month", "currency": "USD"}
+  ],
+  "events": [
+    {"at": "2026-03-01T00:00:00Z", "type": "subscribe", "plan": "team-month"},
+    {"at": "2026-03-01T00:00:00Z", "type": "downgrade", "plan": "pro-month"}
+  ],
+  "period": {
+    "start": "2026-03-01T00:00:00Z",
+    "end": "2026-05-01T00:00:00Z"
+  },
+  "invoice": {
+    "currency": "USD",
+    "lines": [
+      {"rule": "charge.full", "description": "team-month: full period 2026-03-01 to 2026-04-01", "amount_cents": 5000},
+      {"rule": "downgrade.charge", "description": "pro-month: full period 2026-03-01 to 2026-04-01", "amount_cents": 2000},
+      {"rule": "credit.applied", "description": "credit balance applied", "amount_cents": -2000}
+    ],
+    "total_cents": 5000
+  }
+}
