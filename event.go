@@ -21,12 +21,23 @@ const (
 	// balance, which the engine applies against future charges
 	// (see specs/03-downgrade-credit.md).
 	EventDowngrade EventType = "downgrade"
+	// EventApplyPromo arms a one-shot percentage discount that the engine
+	// applies to the next event producing a positive charge. The event carries
+	// no plan; it uses Event.Bps (discount in basis points) and Event.Code
+	// (promo code shown in the line). It produces no invoice line itself
+	// (see specs/04-promo-percent.md).
+	EventApplyPromo EventType = "apply_promo"
 )
 
 // Event is a single subscription lifecycle event. Events are fed to Compute
 // in chronological order; the engine never reorders them.
+//
+// Bps and Code are used only by EventApplyPromo and are omitted from the JSON
+// of every other event type; the other types ignore them.
 type Event struct {
 	At     time.Time `json:"at"`
 	Type   EventType `json:"type"`
 	PlanID string    `json:"plan"`
+	Bps    int64     `json:"bps,omitempty"`
+	Code   string    `json:"code,omitempty"`
 }

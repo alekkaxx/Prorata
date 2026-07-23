@@ -87,6 +87,17 @@ func (m Money) Percent(bps int64) Money {
 	return Money(q)
 }
 
+// formatPercent renders basis points as a human percentage for promo line
+// descriptions: whole percents print without a fraction ("20"), sub-percent
+// precision prints two decimals ("7.50"). Only non-negative bps occur (promos
+// validate their range before arming), so no sign handling is needed.
+func formatPercent(bps int64) string {
+	if bps%100 == 0 {
+		return fmt.Sprintf("%d", bps/100)
+	}
+	return fmt.Sprintf("%d.%02d", bps/100, bps%100)
+}
+
 // String formats the amount with two decimal places, e.g. "12.34" or "-0.05".
 // Two minor units per major unit is assumed, which holds for the supported
 // currencies.
