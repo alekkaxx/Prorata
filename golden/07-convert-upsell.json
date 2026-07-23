@@ -1,0 +1,23 @@
+{
+  "name": "convert-upsell",
+  "catalog": [
+    {"id": "pro-month", "price_cents": 2000, "interval": "month", "currency": "USD"},
+    {"id": "business-year", "price_cents": 48000, "interval": "year", "currency": "USD"}
+  ],
+  "events": [
+    {"at": "2026-01-01T00:00:00Z", "type": "trial_start", "plan": "pro-month"},
+    {"at": "2026-01-20T00:00:00Z", "type": "trial_convert", "plan": "business-year"}
+  ],
+  "period": {
+    "start": "2026-01-01T00:00:00Z",
+    "end": "2026-02-01T00:00:00Z"
+  },
+  "invoice": {
+    "currency": "USD",
+    "lines": [
+      {"rule": "trial.start", "description": "pro-month: trial 2026-01-01 to 2026-02-01 (free)", "amount_cents": 0},
+      {"rule": "convert.charge", "description": "business-year: full period 2026-01-20 to 2027-01-20", "amount_cents": 48000}
+    ],
+    "total_cents": 48000
+  }
+}
