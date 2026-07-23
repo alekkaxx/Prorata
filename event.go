@@ -21,23 +21,28 @@ const (
 	// balance, which the engine applies against future charges
 	// (see specs/03-downgrade-credit.md).
 	EventDowngrade EventType = "downgrade"
-	// EventApplyPromo arms a one-shot percentage discount that the engine
-	// applies to the next event producing a positive charge. The event carries
-	// no plan; it uses Event.Bps (discount in basis points) and Event.Code
-	// (promo code shown in the line). It produces no invoice line itself
-	// (see specs/04-promo-percent.md).
+	// EventApplyPromo arms a one-shot discount that the engine applies to the
+	// next event producing a positive charge. The event carries no plan; it
+	// uses Event.Code (promo code shown in the line) plus exactly one of
+	// Event.Bps (a percentage discount in basis points, see
+	// specs/04-promo-percent.md) or Event.AmountCents (a fixed-amount discount
+	// in minor units, clamped to the charge, see specs/05-promo-fixed.md). It
+	// produces no invoice line itself.
 	EventApplyPromo EventType = "apply_promo"
 )
 
 // Event is a single subscription lifecycle event. Events are fed to Compute
 // in chronological order; the engine never reorders them.
 //
-// Bps and Code are used only by EventApplyPromo and are omitted from the JSON
-// of every other event type; the other types ignore them.
+// Bps, AmountCents and Code are used only by EventApplyPromo and are omitted
+// from the JSON of every other event type; the other types ignore them. A
+// promo event sets exactly one of Bps (percentage) or AmountCents (fixed); see
+// EventApplyPromo.
 type Event struct {
-	At     time.Time `json:"at"`
-	Type   EventType `json:"type"`
-	PlanID string    `json:"plan"`
-	Bps    int64     `json:"bps,omitempty"`
-	Code   string    `json:"code,omitempty"`
+	At          time.Time `json:"at"`
+	Type        EventType `json:"type"`
+	PlanID      string    `json:"plan"`
+	Bps         int64     `json:"bps,omitempty"`
+	AmountCents Money     `json:"amount_cents,omitempty"`
+	Code        string    `json:"code,omitempty"`
 }

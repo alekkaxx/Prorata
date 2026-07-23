@@ -24,14 +24,32 @@ type state struct {
 	promo pendingPromo
 }
 
-// pendingPromo is a one-shot percentage discount waiting to be applied to the
-// next positive charge. The rule handling EventApplyPromo arms it; applyPromo
-// burns it the moment it discounts a charge. A zero pendingPromo (armed ==
-// false) means nothing is pending.
+// promoKind distinguishes the two one-shot promo flavors a pendingPromo can
+// hold. It is only meaningful while armed is true; the zero value coincides
+// with promoPercent, which is harmless because a disarmed promo is never read.
+type promoKind uint8
+
+const (
+	// promoPercent takes bps basis points off the gross charge, rounded half
+	// away from zero (rule promo.percent, specs/04-promo-percent.md).
+	promoPercent promoKind = iota
+	// promoFixed takes a flat number of minor units off the gross charge,
+	// clamped so the discount never exceeds the charge (rule promo.fixed,
+	// specs/05-promo-fixed.md).
+	promoFixed
+)
+
+// pendingPromo is a one-shot discount waiting to be applied to the next
+// positive charge. The rule handling EventApplyPromo arms it; applyPromo burns
+// it the moment it discounts a charge. A zero pendingPromo (armed == false)
+// means nothing is pending. kind selects which of bps (promoPercent) or amount
+// (promoFixed) carries the discount.
 type pendingPromo struct {
-	armed bool
-	bps   int64
-	code  string
+	armed  bool
+	kind   promoKind
+	bps    int64
+	amount Money
+	code   string
 }
 
 // ruleCreditApplied is the RuleID for lines that draw down the subscription's
@@ -52,6 +70,14 @@ const creditAppliedDescription = "credit balance applied"
 // the promo is armed as core state, so any charging rule's output can be
 // discounted uniformly (see specs/04-promo-percent.md).
 const rulePromoPercent RuleID = "promo.percent"
+
+// rulePromoFixed is the RuleID for the discount line produced when a pending
+// fixed-amount promo is applied to an event's positive charges. Like
+// promo.percent it is produced by the engine (applyPromo), not by an event
+// rule, so any charging rule's output can be discounted uniformly. The applied
+// amount is clamped to the gross charge so money is never created
+// (see specs/05-promo-fixed.md).
+const rulePromoFixed RuleID = "promo.fixed"
 
 // ruleFunc applies one event to the subscription state and returns the
 // invoice lines the event produces, if any.
@@ -150,17 +176,21 @@ func applyCredit(st *state, lines []Line) []Line {
 }
 
 // applyPromo discounts an event's positive charges by the armed one-shot promo,
-// if any. It sums the positive-amount lines of the event (its gross charge),
-// takes bps of that sum (half away from zero, per Money.Percent), appends a
-// single promo.percent line for the negative discount, and burns the promo.
-// Negative lines (credits) are never discounted: a promo reduces what is
-// charged, not what is refunded.
+// if any. It sums the positive-amount lines of the event (its gross charge,
+// base), computes the discount according to the promo kind, appends a single
+// negative discount line, and burns the promo. Negative lines (credits) are
+// never discounted: a promo reduces what is charged, not what is refunded.
+//
+// For promoPercent the discount is base.Percent(bps) (half away from zero) on a
+// promo.percent line. For promoFixed the discount is min(amount, base) — clamped
+// so it can never exceed the charge and create money — on a promo.fixed line; a
+// clamped line names the nominal amount it was capped from.
 //
 // If no promo is armed, or the event has no positive charge, the lines are
 // returned unchanged and the promo stays armed until a charge appears. applyPromo
 // runs before applyCredit so the credit balance draws down the already-discounted
 // net, keeping credit.applied on the post-discount charge
-// (see specs/04-promo-percent.md, D2).
+// (see specs/04-promo-percent.md D2, specs/05-promo-fixed.md).
 func applyPromo(st *state, lines []Line) []Line {
 	if !st.promo.armed {
 		return lines
@@ -176,6 +206,19 @@ func applyPromo(st *state, lines []Line) []Line {
 	}
 	p := st.promo
 	st.promo = pendingPromo{}
+	if p.kind == promoFixed {
+		applied := min(p.amount, base)
+		desc := fmt.Sprintf("%s: -%s off %s", p.code, applied.String(), base.String())
+		if p.amount > base {
+			desc = fmt.Sprintf("%s: -%s off %s (capped from %s)",
+				p.code, applied.String(), base.String(), p.amount.String())
+		}
+		return append(lines, Line{
+			RuleID:      rulePromoFixed,
+			Description: desc,
+			Amount:      -applied,
+		})
+	}
 	return append(lines, Line{
 		RuleID: rulePromoPercent,
 		Description: fmt.Sprintf(
