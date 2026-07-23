@@ -12,6 +12,14 @@ type state struct {
 	periodStart time.Time
 	periodEnd   time.Time
 	paid        Money
+	// trial reports whether the current plan/period is a free trial rather than
+	// a paid subscription. It is set by the trial rule (EventTrial) and cleared
+	// when the trial is converted (EventConvert). It distinguishes a genuine
+	// trial (paid == 0 because nothing was ever charged) from a subscription to
+	// a zero-price plan, so conversion applies only to a real trial and the
+	// credit invariant (credit <= actually paid) is never at risk
+	// (see specs/07-trial.md).
+	trial bool
 	// creditBalance is prepaid value the customer is owed but was not refunded
 	// in cash (banked by a downgrade). It is always >= 0 and never exceeds the
 	// sum of amounts actually paid. The engine draws it down against charges

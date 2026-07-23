@@ -29,6 +29,19 @@ const (
 	// in minor units, clamped to the charge, see specs/05-promo-fixed.md). It
 	// produces no invoice line itself.
 	EventApplyPromo EventType = "apply_promo"
+	// EventTrial starts a free trial of a plan: it opens a billing period on
+	// the plan with nothing paid (state.paid == 0) and emits a single zero
+	// trial.start line so the invoice explains why the period is free. A trial
+	// requires no active subscription and never charges; the customer only
+	// begins paying on a later EventConvert (see specs/07-trial.md).
+	EventTrial EventType = "trial_start"
+	// EventConvert converts an active trial into a paid subscription: it charges
+	// the plan named by Event.PlanID (the trial plan, or a different one, since
+	// the free trial leaves no remainder to credit either way) in full for a
+	// fresh billing period starting at Event.At, and clears the trial flag. The
+	// unused remainder of the trial has zero value and simply burns. It requires
+	// an active trial (see specs/07-trial.md).
+	EventConvert EventType = "trial_convert"
 )
 
 // Event is a single subscription lifecycle event. Events are fed to Compute
