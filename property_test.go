@@ -154,6 +154,84 @@ func TestProrateCreditNeverExceedsPaid(t *testing.T) {
 	})
 }
 
+// TestCreditLedgerNeverOverdraws verifies the credit-ledger invariant from
+// specs/03-downgrade-credit.md on arbitrary chains of plan changes: for any
+// subscribe followed by random upgrades and downgrades, the credit balance
+// behaves like a real ledger. Because a downgrade only banks a share of what
+// was actually paid and the engine only ever applies min(net, balance), the
+// balance can never go negative and can never hand out more credit than was
+// banked. Both are unobservable directly, so the test asserts their strongest
+// public consequence: the sum of all credit.applied magnitudes never exceeds
+// the sum of the positive charge lines (each application is capped by its own
+// event's net charge, so it is capped by paid), every credit.applied line is
+// strictly negative, and the invoice total equals the sum of its lines.
+func TestCreditLedgerNeverOverdraws(t *testing.T) {
+	rapid.Check(t, func(t *rapid.T) {
+		catalog := Catalog{
+			"a": {ID: "a", Price: Money(rapid.Int64Range(0, 10_000_00).Draw(t, "priceA")), Interval: IntervalMonth, Currency: "USD"},
+			"b": {ID: "b", Price: Money(rapid.Int64Range(0, 10_000_00).Draw(t, "priceB")), Interval: IntervalMonth, Currency: "USD"},
+			"c": {ID: "c", Price: Money(rapid.Int64Range(0, 10_000_00).Draw(t, "priceC")), Interval: IntervalYear, Currency: "USD"},
+		}
+		ids := []string{"a", "b", "c"}
+
+		at := time.Date(
+			rapid.IntRange(2020, 2030).Draw(t, "year"),
+			time.Month(rapid.IntRange(1, 12).Draw(t, "month")),
+			rapid.IntRange(1, 28).Draw(t, "day"),
+			0, 0, 0, 0, time.UTC,
+		)
+		cur := ids[rapid.IntRange(0, 2).Draw(t, "firstPlan")]
+		events := []Event{{At: at, Type: EventSubscribe, PlanID: cur}}
+
+		steps := rapid.IntRange(1, 6).Draw(t, "steps")
+		for i := 0; i < steps; i++ {
+			// Draw a plan different from the current one to avoid the
+			// same-plan error; the rule does not compare prices, so upgrade
+			// and downgrade are both legal to either plan.
+			next := ids[rapid.IntRange(0, 1).Draw(t, "planPick")]
+			if next == cur {
+				next = ids[2]
+			}
+			typ := EventUpgrade
+			if rapid.Bool().Draw(t, "isDowngrade") {
+				typ = EventDowngrade
+			}
+			at = at.AddDate(0, 0, rapid.IntRange(0, 400).Draw(t, "gapDays"))
+			events = append(events, Event{At: at, Type: typ, PlanID: next})
+			cur = next
+		}
+
+		period := Period{
+			Start: time.Date(2019, 1, 1, 0, 0, 0, 0, time.UTC),
+			End:   time.Date(2035, 1, 1, 0, 0, 0, 0, time.UTC),
+		}
+		inv, err := Compute(catalog, events, period)
+		if err != nil {
+			t.Fatalf("Compute error: %v", err)
+		}
+
+		var lineSum, positiveCharges, appliedMagnitude Money
+		for _, ln := range inv.Lines {
+			lineSum += ln.Amount
+			if ln.Amount > 0 {
+				positiveCharges += ln.Amount
+			}
+			if ln.RuleID == ruleCreditApplied {
+				if ln.Amount >= 0 {
+					t.Fatalf("credit.applied amount %d is not negative", ln.Amount)
+				}
+				appliedMagnitude += -ln.Amount
+			}
+		}
+		if lineSum != inv.Total {
+			t.Fatalf("sum of lines %d != invoice total %d", lineSum, inv.Total)
+		}
+		if appliedMagnitude > positiveCharges {
+			t.Fatalf("applied credit %d exceeds positive charges %d (ledger overdrawn)", appliedMagnitude, positiveCharges)
+		}
+	})
+}
+
 // TestAddIntervalProperty verifies the calendar-clamp decision from
 // specs/00-core.md D3: the anchor day never grows, the result is always
 // strictly later, and adding a month lands in the next calendar month.
