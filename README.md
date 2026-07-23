@@ -8,3 +8,4 @@
 | Правило | RuleID | Событие | Что делает | Тир | Заходов на гейт | Спека |
 |---------|--------|---------|-----------|-----|-----------------|-------|
 | full-charge | `charge.full` | `subscribe` | Полное списание цены плана за первый биллинг-период при старте подписки | builder | 1 | [specs/01-full-charge.md](specs/01-full-charge.md) |
+| prorate-upgrade | `prorate.credit`, `prorate.charge` | `upgrade` | Кредит за неиспользованный остаток старого плана + полное списание нового | builder | 1 | [specs/02-prorate-upgrade.md](specs/02-prorate-upgrade.md) |
