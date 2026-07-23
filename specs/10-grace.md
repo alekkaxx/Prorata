@@ -292,8 +292,11 @@ refund возвращает 1226 (≤ 2000 собранного), а не 0.
 }
 ```
 
-Рефанд-событие в JSON: `{"at": "...", "type": "refund", "policy": "full"}` (без `plan` для
-full/prorated — план берётся из состояния; при желании `plan` можно указать, он валидируется).
+Рефанд-событие в JSON: `{"at": "...", "type": "refund", "plan": "pro-month", "policy": "full"}`.
+Поле `plan` **обязательно**: `refundSubscription` (D7 спеки 08, `rule_refund.go`) валидирует
+`ev.PlanID` по каталогу безусловно, до ветвления по policy. Пропуск `plan` ⇒ `ev.PlanID == ""`
+⇒ `c[""]` не найден ⇒ ошибка `refund: unknown plan ""`. Расчёт идёт от `st.plan`, но
+well-formedness события требует валидного `plan` в каталоге (как и все три события грейса).
 
 ## Табличные тесты (rule_grace_test.go, пишет mechanic)
 
@@ -315,4 +318,44 @@ full/prorated — план берётся из состояния; при жел
 
 ## Gate
 
-_(пусто — заполняется architect'ом на гейт-ревью диффа `rule_grace.go`)_
+**2026-07-24 — PASS** (architect, сжатый конвейер: фикстуры+реализация одним заходом,
+гейт шаги 4+5 слитно).
+
+Дифф `1f53e85` (`rule_grace.go`, +148, ничего больше) сверен со спекой и инвариантами:
+
+- **Три события, три обработчика** — `init()` регистрирует `EventPaymentFailed`/
+  `EventGraceRecover`/`EventGraceExpire` через `registerRule`; ядро не тронуто (ядро — в
+  отдельном architect-коммите `e47e072`). Скоуп чист.
+- **D3, нулевые маркеры** — все три строки `Amount: 0`, каждая с RuleID и Description;
+  тексты Description совпадают со спекой посимвольно, дата = `ev.At.UTC()` формат `2006-01-02`.
+- **D5, кэш прячется/возвращается через `graceHeldCash`** — failed: `graceHeldCash =
+  cashPaid; paid = 0; cashPaid = 0; grace = true`; recover: `paid = plan.Price; cashPaid =
+  graceHeldCash; graceHeldCash = 0; grace = false`. Перенос кэша — чистое перемещение без
+  арифметики: recover возвращает **ровно** спрятанное. Деньги не создаются и не исчезают.
+- **D4, заряд при expire не реверсится** — `graceExpire` только сворачивает подписку
+  (plan=nil, период zero, paid/cashPaid=0, trial/grace=false, graceHeldCash=0); леджер
+  (`creditBalance`, вооружённый promo) не тронут; реверс-строки нет. Инвариант «кредит ≤
+  собранного кэша (0)» держится.
+- **Тексты ошибок** — все пять совпадают со спекой: `no active subscription`,
+  `cannot fail payment on a trial`, `already in grace`, `no grace in progress`,
+  `unknown plan %q`. Порядок гардов фазы 1 (plan→trial→grace→plan-в-каталоге) точен.
+- **`grace ⇒ plan != nil`** — гард `!st.grace` пройден ⇒ `st.plan != nil` (teardown'ы
+  чистят флаг, D6), поэтому `st.plan.Price`/`st.plan.ID` в recover/expire без nil-разыменования.
+- **Эмерджентность** — golden `10-grace-refund-zero`: refund в грейсе при `cashPaid == 0`
+  возвращает `0.00` без единой строки в `rule_refund.go`. golden `10-grace-recover-then-refund`:
+  после recover `cashPaid = 2000` ⇒ prorated refund `-1226` (≤ собранного). Оба зелёные.
+- **Идемпотентность** — чистая функция состояния, часов нет; повтор входа → тот же инвойс.
+  `Total == Σ строк` (нулевые маркеры вклад не дают).
+
+`make check` зелёный.
+
+### Отклонение builder от буквы спеки — builder ПРАВ, дыра в сниппете спеки (исправлено)
+
+Builder явно проставил `"plan": "pro-month"` в refund-события golden 3–4, хотя сниппет
+формата golden (раздел «Формат golden-файла») допускал omission plan для full/prorated.
+`refundSubscription` (`rule_refund.go:52`, D7 спеки 08) валидирует `c[ev.PlanID]`
+**безусловно, до** ветвления по policy: при пропущенном `plan` было бы `ev.PlanID == ""`,
+`c[""]` не существует ⇒ ошибка `refund: unknown plan ""`, и golden упал бы. Значит
+omission plan в refund-событии для full/prorated в этом каталоге **невозможен** — сниппет
+спеки был неверен. Builder не отклонился от кода, он поймал дыру сниппета. Строка сниппета
+исправлена: `plan` в refund-событии обязателен, потому что D7 refund валидирует его.
