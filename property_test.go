@@ -232,6 +232,93 @@ func TestCreditLedgerNeverOverdraws(t *testing.T) {
 	})
 }
 
+// TestPromoOneShotAndBounded verifies the promo invariants from
+// specs/04-promo-percent.md on arbitrary discount rates and plan-change chains:
+// a single promo armed before subscribe is consumed by the first positive
+// charge and never again (one-shot), the discount never creates money, and the
+// invoice stays balanced. Because prices are strictly positive the subscribe
+// charge is always positive, so the promo is always consumed exactly once no
+// matter how long the subsequent chain is. The test asserts the strongest
+// public consequences: exactly one promo.percent line exists (D3 burn, no
+// repeat), it is never positive, its magnitude never exceeds the sum of all
+// positive charges (D2/D4: a discount cannot exceed what is charged), and the
+// invoice total equals the sum of its lines.
+func TestPromoOneShotAndBounded(t *testing.T) {
+	rapid.Check(t, func(t *rapid.T) {
+		catalog := Catalog{
+			"a": {ID: "a", Price: Money(rapid.Int64Range(1, 10_000_00).Draw(t, "priceA")), Interval: IntervalMonth, Currency: "USD"},
+			"b": {ID: "b", Price: Money(rapid.Int64Range(1, 10_000_00).Draw(t, "priceB")), Interval: IntervalMonth, Currency: "USD"},
+			"c": {ID: "c", Price: Money(rapid.Int64Range(1, 10_000_00).Draw(t, "priceC")), Interval: IntervalYear, Currency: "USD"},
+		}
+		ids := []string{"a", "b", "c"}
+
+		at := time.Date(
+			rapid.IntRange(2020, 2030).Draw(t, "year"),
+			time.Month(rapid.IntRange(1, 12).Draw(t, "month")),
+			rapid.IntRange(1, 28).Draw(t, "day"),
+			0, 0, 0, 0, time.UTC,
+		)
+		bps := rapid.Int64Range(0, 10000).Draw(t, "bps")
+		cur := ids[rapid.IntRange(0, 2).Draw(t, "firstPlan")]
+
+		// The promo is armed before subscribe, so it discounts the first charge
+		// (subscribe itself), then must never fire again over the chain.
+		events := []Event{
+			{At: at, Type: EventApplyPromo, Bps: bps, Code: "PROMO"},
+			{At: at, Type: EventSubscribe, PlanID: cur},
+		}
+
+		steps := rapid.IntRange(0, 6).Draw(t, "steps")
+		for range steps {
+			next := ids[rapid.IntRange(0, 1).Draw(t, "planPick")]
+			if next == cur {
+				next = ids[2]
+			}
+			typ := EventUpgrade
+			if rapid.Bool().Draw(t, "isDowngrade") {
+				typ = EventDowngrade
+			}
+			at = at.AddDate(0, 0, rapid.IntRange(0, 400).Draw(t, "gapDays"))
+			events = append(events, Event{At: at, Type: typ, PlanID: next})
+			cur = next
+		}
+
+		period := Period{
+			Start: time.Date(2019, 1, 1, 0, 0, 0, 0, time.UTC),
+			End:   time.Date(2035, 1, 1, 0, 0, 0, 0, time.UTC),
+		}
+		inv, err := Compute(catalog, events, period)
+		if err != nil {
+			t.Fatalf("Compute error: %v", err)
+		}
+
+		var lineSum, positiveCharges, discountMagnitude Money
+		promoLines := 0
+		for _, ln := range inv.Lines {
+			lineSum += ln.Amount
+			if ln.Amount > 0 {
+				positiveCharges += ln.Amount
+			}
+			if ln.RuleID == rulePromoPercent {
+				promoLines++
+				if ln.Amount > 0 {
+					t.Fatalf("promo.percent amount %d is positive, want <= 0", ln.Amount)
+				}
+				discountMagnitude += -ln.Amount
+			}
+		}
+		if promoLines != 1 {
+			t.Fatalf("got %d promo.percent lines, want exactly 1 (one-shot)", promoLines)
+		}
+		if discountMagnitude > positiveCharges {
+			t.Fatalf("discount %d exceeds positive charges %d (money created)", discountMagnitude, positiveCharges)
+		}
+		if lineSum != inv.Total {
+			t.Fatalf("sum of lines %d != invoice total %d", lineSum, inv.Total)
+		}
+	})
+}
+
 // TestAddIntervalProperty verifies the calendar-clamp decision from
 // specs/00-core.md D3: the anchor day never grows, the result is always
 // strictly later, and adding a month lands in the next calendar month.
