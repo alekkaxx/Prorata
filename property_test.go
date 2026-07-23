@@ -184,7 +184,7 @@ func TestCreditLedgerNeverOverdraws(t *testing.T) {
 		events := []Event{{At: at, Type: EventSubscribe, PlanID: cur}}
 
 		steps := rapid.IntRange(1, 6).Draw(t, "steps")
-		for i := 0; i < steps; i++ {
+		for range steps {
 			// Draw a plan different from the current one to avoid the
 			// same-plan error; the rule does not compare prices, so upgrade
 			// and downgrade are both legal to either plan.
