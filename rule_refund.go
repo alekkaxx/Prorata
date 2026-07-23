@@ -114,6 +114,11 @@ func refundSubscription(st *state, c Catalog, ev Event) ([]Line, error) {
 	st.paid = 0
 	st.cashPaid = 0
 	st.trial = false
+	// A refund during an open grace period tears the subscription down as well;
+	// clearing the grace flag keeps the "grace implies plan != nil" invariant so a
+	// later resubscribe starts clean (see specs/10-grace.md).
+	st.grace = false
+	st.graceHeldCash = 0
 
 	return []Line{line}, nil
 }

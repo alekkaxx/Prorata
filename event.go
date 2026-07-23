@@ -61,6 +61,33 @@ const (
 	// Only charges from this event onward are taxed; earlier charges are never
 	// taxed retroactively (see specs/09-vat.md).
 	EventSetVAT EventType = "set_vat"
+	// EventPaymentFailed opens a grace period on the active subscription when the
+	// caller reports that the charge for the current period was not collected
+	// (e.g. a declined card). It keeps the subscription alive — access is retained
+	// — but records that no cash was actually collected for the period: it zeroes
+	// state.paid and state.cashPaid (stashing the pre-grace cash in
+	// state.graceHeldCash) so any refund or proration during grace honestly credits
+	// nothing, and sets state.grace. It produces a single zero-amount grace.start
+	// line; the original charge line stays on the invoice as the outstanding debt.
+	// The grace window has no engine-side length: the library has no clock, so the
+	// caller resolves grace explicitly with EventGraceRecover or EventGraceExpire
+	// (see specs/10-grace.md).
+	EventPaymentFailed EventType = "payment_failed"
+	// EventGraceRecover closes an open grace period after the caller reports the
+	// outstanding charge was finally collected. It restores state.paid to the plan
+	// price and state.cashPaid to the stashed pre-grace cash, clears state.grace,
+	// and emits a single zero-amount grace.recover line. The subscription continues
+	// unchanged; no new charge is produced (the original charge already stands). It
+	// requires an open grace period (see specs/10-grace.md).
+	EventGraceRecover EventType = "grace_recover"
+	// EventGraceExpire closes an open grace period by tearing down the subscription
+	// for non-payment: it clears the plan and period (access ends at Event.At) and
+	// emits a single zero-amount grace.expire line. Like a refund it leaves the
+	// engine ledger (creditBalance, any armed promo) untouched, and it moves no
+	// money: the uncollected charge is never reversed, because a reversal would be a
+	// credit exceeding the zero cash actually collected. It requires an open grace
+	// period (see specs/10-grace.md).
+	EventGraceExpire EventType = "grace_expire"
 )
 
 // RefundPolicy selects how much of the current period is returned by an

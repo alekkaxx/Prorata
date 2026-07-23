@@ -48,6 +48,21 @@ type state struct {
 	// with no EventSetVAT adds no VAT and leaves pre-VAT invoices byte-identical
 	// (see specs/09-vat.md).
 	vatBps int64
+	// grace reports whether the current subscription is in a grace period opened
+	// by EventPaymentFailed: the charge for the current period was reported
+	// uncollected, but access is retained until the caller resolves it with
+	// EventGraceRecover or EventGraceExpire. While grace holds, paid and cashPaid
+	// are 0 (nothing was collected), so any refund or proration during grace
+	// credits nothing; the pre-grace cash is stashed in graceHeldCash for
+	// restoration on recovery. The invariant "grace implies plan != nil" is
+	// maintained because every teardown (refund, grace expiry) clears the flag
+	// (see specs/10-grace.md).
+	grace bool
+	// graceHeldCash stashes state.cashPaid at the moment EventPaymentFailed opened
+	// the current grace period, so EventGraceRecover can restore the honest cash
+	// basis for the period after payment is collected. It is only meaningful while
+	// grace is true and is 0 otherwise (see specs/10-grace.md).
+	graceHeldCash Money
 }
 
 // promoKind distinguishes the two one-shot promo flavors a pendingPromo can
