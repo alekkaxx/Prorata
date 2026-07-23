@@ -114,4 +114,26 @@
 
 ## Gate
 
-(заполнит architect после реализации)
+**2026-07-23 — PASS** (architect)
+
+Реализация `rule_charge.go` соответствует спеке и инвариантам.
+
+Соответствие спеке:
+- Неизвестный план → `prorata: subscribe: unknown plan "<id>"` (дословно).
+- Повторный subscribe при `st.plan != nil` → `prorata: subscribe: already subscribed`.
+- Период `[ev.At, AddInterval(ev.At, plan.Interval))`; кламп 31 янв → 28 фев подтверждён golden `01-subscribe-clamp-jan31`.
+- Состояние (plan/periodStart/periodEnd/paid=Price) и единственная строка (RuleID `charge.full`, Description в UTC `2006-01-02`, Amount=Price) построены как в спеке.
+- Событие вне периода и ровно в `End` (полуинтервал) отсекается движком; строка возвращается всегда.
+- 4 golden байт-в-байт совпали с примерами 1–4; событие-до-периода даёт инвойс без `lines` (omitempty) и `total_cents: 0`.
+
+Инварианты:
+- Деньги не создаются/не исчезают: `Total` = сумма строк = `plan.Price` (одна строка).
+- Идемпотентность: golden гоняет `Compute` дважды и сверяет байты; функция чистая.
+- Каждая строка несёт RuleID + Description; движок отвергает пустые (`engine.go`).
+- Кредит ≤ уплаченного — неприменимо: правило кредитов не создаёт.
+
+Ядро не тронуто: `git diff HEAD` затрагивает только `go.mod` (снят `// indirect` у rapid — корректный результат `go mod tidy`, не .go-код ядра). money/period/plan/event/invoice/engine без изменений.
+
+Стиль: godoc на английском, файл один, конвенция `rule_<name>.go`, регистрация через `init`+`registerRule` без правки ядра.
+
+Некритичная дыра в покрытии (не блокер): табличный тест `event-at-period-end` (`rule_charge_test.go`) отбрасывает инвойс (`_, err := Compute(...)`) и проверяет только `err == nil` — не утверждает пустой инвойс/`total 0`, как требует табличный тест №3 спеки. Отсечение границы доказано в другом месте: `period_test.go` проверяет `Contains(End) == false`, а пустой инвойс байт-в-байт покрыт golden `01-subscribe-before-period`. Рекомендация mechanic на будущее: дожать ассерт до `len(inv.Lines)==0 && inv.Total==0`.

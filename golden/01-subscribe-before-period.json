@@ -1,0 +1,17 @@
+{
+  "name": "subscribe-before-period",
+  "catalog": [
+    {"id": "pro-month", "price_cents": 2000, "interval": "month", "currency": "USD"}
+  ],
+  "events": [
+    {"at": "2026-01-01T00:00:00Z", "type": "subscribe", "plan": "pro-month"}
+  ],
+  "period": {
+    "start": "2026-02-01T00:00:00Z",
+    "end": "2026-03-01T00:00:00Z"
+  },
+  "invoice": {
+    "currency": "USD",
+    "total_cents": 0
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "name": "subscribe-clamp-jan31",
+  "catalog": [
+    {"id": "pro-month", "price_cents": 2000, "interval": "month", "currency": "USD"}
+  ],
+  "events": [
+    {"at": "2026-01-31T00:00:00Z", "type": "subscribe", "plan": "pro-month"}
+  ],
+  "period": {
+    "start": "2026-01-01T00:00:00Z",
+    "end": "2026-02-01T00:00:00Z"
+  },
+  "invoice": {
+    "currency": "USD",
+    "lines": [
+      {"rule": "charge.full", "description": "pro-month: full period 2026-01-31 to 2026-02-28", "amount_cents": 2000}
+    ],
+    "total_cents": 2000
+  }
+}

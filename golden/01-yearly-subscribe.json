@@ -1,0 +1,20 @@
+{
+  "name": "yearly-subscribe",
+  "catalog": [
+    {"id": "business-year", "price_cents": 48000, "interval": "year", "currency": "USD"}
+  ],
+  "events": [
+    {"at": "2026-01-13T00:00:00Z", "type": "subscribe", "plan": "business-year"}
+  ],
+  "period": {
+    "start": "2026-01-01T00:00:00Z",
+    "end": "2026-02-01T00:00:00Z"
+  },
+  "invoice": {
+    "currency": "USD",
+    "lines": [
+      {"rule": "charge.full", "description": "business-year: full period 2026-01-13 to 2027-01-13", "amount_cents": 48000}
+    ],
+    "total_cents": 48000
+  }
+}
