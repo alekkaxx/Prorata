@@ -11,3 +11,4 @@
 | prorate-upgrade | `prorate.credit`, `prorate.charge` | `upgrade` | Кредит за неиспользованный остаток старого плана + полное списание нового | builder | 1 | [specs/02-prorate-upgrade.md](specs/02-prorate-upgrade.md) |
 | downgrade-credit | `downgrade.charge`, `credit.applied` | `downgrade` | Остаток старого плана в кредитный баланс, списание нового плана, баланс гасит будущие списания | builder | 1 | [specs/03-downgrade-credit.md](specs/03-downgrade-credit.md) |
 | promo-percent | `promo.percent` | `apply_promo` | Одноразовая процентная скидка на первое положительное списание до кредитного баланса | builder | 1 | [specs/04-promo-percent.md](specs/04-promo-percent.md) |
+| promo-fixed | `promo.fixed` | `apply_promo` | Одноразовая фиксированная скидка на первое положительное списание до кредитного баланса, стекование запрещено | builder | 2 (эскалация спеки) | [specs/05-promo-fixed.md](specs/05-promo-fixed.md) |
