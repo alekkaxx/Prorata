@@ -1,0 +1,19 @@
+{
+  "name": "05-fixed-clamp",
+  "catalog": [
+    {"id": "pro-month", "price_cents": 2000, "interval": "month", "currency": "USD"}
+  ],
+  "events": [
+    {"at": "2026-01-01T00:00:00Z", "type": "apply_promo", "amount_cents": 5000, "code": "BIGCREDIT"},
+    {"at": "2026-01-01T00:00:00Z", "type": "subscribe", "plan": "pro-month"}
+  ],
+  "period": {"start": "2026-01-01T00:00:00Z", "end": "2026-02-01T00:00:00Z"},
+  "invoice": {
+    "currency": "USD",
+    "lines": [
+      {"rule": "charge.full", "description": "pro-month: full period 2026-01-01 to 2026-02-01", "amount_cents": 2000},
+      {"rule": "promo.fixed", "description": "BIGCREDIT: -20.00 off 20.00 (capped from 50.00)", "amount_cents": -2000}
+    ],
+    "total_cents": 0
+  }
+}
