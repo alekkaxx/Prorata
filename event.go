@@ -42,6 +42,42 @@ const (
 	// unused remainder of the trial has zero value and simply burns. It requires
 	// an active trial (see specs/07-trial.md).
 	EventConvert EventType = "trial_convert"
+	// EventRefund tears down an active subscription and returns money for the
+	// current period according to Event.Policy (see RefundPolicy). It closes the
+	// subscription at Event.At (plan is cleared, no access after the refund) and
+	// moves at most the cash actually paid for the current period — never the
+	// nominal plan price — so the "credit <= actually paid" invariant holds even
+	// when a promo or the credit balance reduced the original charge. Refund is
+	// distinct from cancellation: a refund always moves money and ends access at
+	// Event.At, whereas cancelling without a refund (access kept until period
+	// end, no money) is a separate, future concern (see specs/08-refund.md).
+	EventRefund EventType = "refund"
+)
+
+// RefundPolicy selects how much of the current period is returned by an
+// EventRefund and where it goes. It lives on the event, not on the plan,
+// because a refund is an exceptional, per-case decision made at refund time,
+// not a standing property of the plan (see specs/08-refund.md).
+type RefundPolicy string
+
+// Supported refund policies. Amounts are always drawn from the cash actually
+// paid for the current period (state.cashPaid), so no policy can return more
+// than was paid.
+const (
+	// RefundFull returns the entire cash paid for the current period as a
+	// negative refund line, regardless of how much of the period was used
+	// (a goodwill refund). RuleID refund.full.
+	RefundFull RefundPolicy = "full"
+	// RefundProrated returns only the unused remainder of the current period,
+	// by days (the same day-granular Allocate split used by proration), as a
+	// negative refund line. RuleID refund.prorated.
+	RefundProrated RefundPolicy = "prorated"
+	// RefundCredit banks the unused remainder of the current period (the same
+	// amount RefundProrated would return in cash) into the subscription's credit
+	// balance instead of returning cash, kin to a downgrade. It emits a
+	// zero-amount refund.credit line documenting the banked amount; the credit
+	// surfaces later as credit.applied when a future charge draws it down.
+	RefundCredit RefundPolicy = "credit"
 )
 
 // Event is a single subscription lifecycle event. Events are fed to Compute
@@ -50,12 +86,13 @@ const (
 // Bps, AmountCents and Code are used only by EventApplyPromo and are omitted
 // from the JSON of every other event type; the other types ignore them. A
 // promo event sets exactly one of Bps (percentage) or AmountCents (fixed); see
-// EventApplyPromo.
+// EventApplyPromo. Policy is used only by EventRefund; see RefundPolicy.
 type Event struct {
-	At          time.Time `json:"at"`
-	Type        EventType `json:"type"`
-	PlanID      string    `json:"plan"`
-	Bps         int64     `json:"bps,omitempty"`
-	AmountCents Money     `json:"amount_cents,omitempty"`
-	Code        string    `json:"code,omitempty"`
+	At          time.Time    `json:"at"`
+	Type        EventType    `json:"type"`
+	PlanID      string       `json:"plan"`
+	Bps         int64        `json:"bps,omitempty"`
+	AmountCents Money        `json:"amount_cents,omitempty"`
+	Code        string       `json:"code,omitempty"`
+	Policy      RefundPolicy `json:"policy,omitempty"`
 }

@@ -12,6 +12,17 @@ type state struct {
 	periodStart time.Time
 	periodEnd   time.Time
 	paid        Money
+	// cashPaid is the cash actually collected for the current period: the plan
+	// price a charging rule opened the period with, reduced by any promo discount
+	// and any credit balance the engine applied to that charge. It is the honest
+	// basis for a refund (see specs/08-refund.md): refunding against nominal paid
+	// could hand back more than the customer ever paid when a promo or credit
+	// covered part of the charge, breaking the "credit <= actually paid"
+	// invariant. cashPaid is always in [0, paid]. It is separate from paid on
+	// purpose: proration on upgrade/downgrade credits the unused remainder at
+	// list value (paid), a deliberate product choice, whereas a cash refund must
+	// never exceed cash received.
+	cashPaid Money
 	// trial reports whether the current plan/period is a free trial rather than
 	// a paid subscription. It is set by the trial rule (EventTrial) and cleared
 	// when the trial is converted (EventConvert). It distinguishes a genuine
@@ -176,6 +187,7 @@ func applyCredit(st *state, lines []Line) []Line {
 	}
 	applied := min(net, st.creditBalance)
 	st.creditBalance -= applied
+	st.cashPaid = max(0, st.cashPaid-applied)
 	return append(lines, Line{
 		RuleID:      ruleCreditApplied,
 		Description: creditAppliedDescription,
@@ -216,6 +228,7 @@ func applyPromo(st *state, lines []Line) []Line {
 	st.promo = pendingPromo{}
 	if p.kind == promoFixed {
 		applied := min(p.amount, base)
+		st.cashPaid = max(0, st.cashPaid-applied)
 		desc := fmt.Sprintf("%s: -%s off %s", p.code, applied.String(), base.String())
 		if p.amount > base {
 			desc = fmt.Sprintf("%s: -%s off %s (capped from %s)",
@@ -227,6 +240,8 @@ func applyPromo(st *state, lines []Line) []Line {
 			Amount:      -applied,
 		})
 	}
+	applied := base.Percent(p.bps)
+	st.cashPaid = max(0, st.cashPaid-applied)
 	return append(lines, Line{
 		RuleID: rulePromoPercent,
 		Description: fmt.Sprintf(
@@ -235,6 +250,6 @@ func applyPromo(st *state, lines []Line) []Line {
 			formatPercent(p.bps),
 			base.String(),
 		),
-		Amount: -base.Percent(p.bps),
+		Amount: -applied,
 	})
 }

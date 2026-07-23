@@ -57,6 +57,7 @@ func prorateUpgrade(st *state, c Catalog, ev Event) ([]Line, error) {
 	st.periodStart = ev.At
 	st.periodEnd = newEnd
 	st.paid = newPlan.Price
+	st.cashPaid = newPlan.Price
 
 	creditLine := Line{
 		RuleID: ruleProrateCredit,

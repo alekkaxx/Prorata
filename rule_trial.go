@@ -46,6 +46,7 @@ func trialStart(st *state, c Catalog, ev Event) ([]Line, error) {
 	st.periodStart = ev.At
 	st.periodEnd = end
 	st.paid = 0
+	st.cashPaid = 0
 	st.trial = true
 
 	line := Line{
@@ -90,6 +91,7 @@ func trialConvert(st *state, c Catalog, ev Event) ([]Line, error) {
 	st.periodStart = ev.At
 	st.periodEnd = end
 	st.paid = plan.Price
+	st.cashPaid = plan.Price
 	st.trial = false
 
 	line := Line{

@@ -37,6 +37,7 @@ func chargeFull(st *state, c Catalog, ev Event) ([]Line, error) {
 	st.periodStart = ev.At
 	st.periodEnd = end
 	st.paid = plan.Price
+	st.cashPaid = plan.Price
 
 	line := Line{
 		RuleID: ruleFullCharge,
