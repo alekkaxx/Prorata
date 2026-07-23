@@ -39,10 +39,7 @@ func prorateUpgrade(st *state, c Catalog, ev Event) ([]Line, error) {
 	oldPlan := st.plan
 	oldPeriodEnd := st.periodEnd
 	total := Period{Start: st.periodStart, End: oldPeriodEnd}.Days()
-	rem := Period{Start: ev.At, End: oldPeriodEnd}.Days()
-	if rem < 0 {
-		rem = 0
-	}
+	rem := max(Period{Start: ev.At, End: oldPeriodEnd}.Days(), 0)
 	used := total - rem
 
 	parts, err := st.paid.Allocate([]int64{int64(used), int64(rem)})
