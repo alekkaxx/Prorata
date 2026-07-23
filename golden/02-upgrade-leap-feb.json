@@ -1,0 +1,23 @@
+{
+  "name": "02-upgrade-leap-feb",
+  "catalog": [
+    {"id": "pro-month", "price_cents": 2000, "interval": "month", "currency": "USD"},
+    {"id": "business-year", "price_cents": 48000, "interval": "year", "currency": "USD"}
+  ],
+  "events": [
+    {"at": "2028-02-01T00:00:00Z", "type": "subscribe", "plan": "pro-month"},
+    {"at": "2028-02-15T00:00:00Z", "type": "upgrade", "plan": "business-year"}
+  ],
+  "period": {
+    "start": "2028-02-15T00:00:00Z",
+    "end": "2029-02-15T00:00:00Z"
+  },
+  "invoice": {
+    "currency": "USD",
+    "lines": [
+      {"rule": "prorate.credit", "description": "pro-month: unused 15/29 days 2028-02-15 to 2028-03-01", "amount_cents": -1034},
+      {"rule": "prorate.charge", "description": "business-year: full period 2028-02-15 to 2029-02-15", "amount_cents": 48000}
+    ],
+    "total_cents": 46966
+  }
+}

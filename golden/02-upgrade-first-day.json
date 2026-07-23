@@ -1,0 +1,24 @@
+{
+  "name": "02-upgrade-first-day",
+  "catalog": [
+    {"id": "pro-month", "price_cents": 2000, "interval": "month", "currency": "USD"},
+    {"id": "business-year", "price_cents": 48000, "interval": "year", "currency": "USD"}
+  ],
+  "events": [
+    {"at": "2026-03-01T00:00:00Z", "type": "subscribe", "plan": "pro-month"},
+    {"at": "2026-03-01T00:00:00Z", "type": "upgrade", "plan": "business-year"}
+  ],
+  "period": {
+    "start": "2026-03-01T00:00:00Z",
+    "end": "2027-03-01T00:00:00Z"
+  },
+  "invoice": {
+    "currency": "USD",
+    "lines": [
+      {"rule": "charge.full", "description": "pro-month: full period 2026-03-01 to 2026-04-01", "amount_cents": 2000},
+      {"rule": "prorate.credit", "description": "pro-month: unused 31/31 days 2026-03-01 to 2026-04-01", "amount_cents": -2000},
+      {"rule": "prorate.charge", "description": "business-year: full period 2026-03-01 to 2027-03-01", "amount_cents": 48000}
+    ],
+    "total_cents": 48000
+  }
+}
