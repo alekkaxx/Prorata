@@ -1,0 +1,26 @@
+{
+  "name": "refund-full-credit-paid",
+  "catalog": [
+    {"id": "pro-month", "price_cents": 2000, "interval": "month", "currency": "USD"},
+    {"id": "basic-month", "price_cents": 800, "interval": "month", "currency": "USD"}
+  ],
+  "events": [
+    {"at": "2026-01-01T00:00:00Z", "type": "subscribe", "plan": "pro-month"},
+    {"at": "2026-01-16T00:00:00Z", "type": "downgrade", "plan": "basic-month"},
+    {"at": "2026-01-20T00:00:00Z", "type": "refund", "plan": "basic-month", "policy": "full"}
+  ],
+  "period": {
+    "start": "2026-01-01T00:00:00Z",
+    "end": "2026-03-01T00:00:00Z"
+  },
+  "invoice": {
+    "currency": "USD",
+    "lines": [
+      {"rule": "charge.full", "description": "pro-month: full period 2026-01-01 to 2026-02-01", "amount_cents": 2000},
+      {"rule": "downgrade.charge", "description": "basic-month: full period 2026-01-16 to 2026-02-16", "amount_cents": 800},
+      {"rule": "credit.applied", "description": "credit balance applied", "amount_cents": -800},
+      {"rule": "refund.full", "description": "basic-month: full refund 2026-01-16 to 2026-02-16", "amount_cents": 0}
+    ],
+    "total_cents": 2000
+  }
+}
