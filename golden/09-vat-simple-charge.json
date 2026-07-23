@@ -1,0 +1,22 @@
+{
+  "name": "09-vat-simple-charge",
+  "catalog": [
+    {"id": "pro-month", "price_cents": 2000, "interval": "month", "currency": "USD"}
+  ],
+  "events": [
+    {"at": "2026-01-01T00:00:00Z", "type": "set_vat", "bps": 2000},
+    {"at": "2026-01-01T00:00:00Z", "type": "subscribe", "plan": "pro-month"}
+  ],
+  "period": {
+    "start": "2026-01-01T00:00:00Z",
+    "end": "2026-03-01T00:00:00Z"
+  },
+  "invoice": {
+    "currency": "USD",
+    "lines": [
+      {"rule": "charge.full", "description": "pro-month: full period 2026-01-01 to 2026-02-01", "amount_cents": 2000},
+      {"rule": "vat.standard", "description": "VAT 20% on 20.00", "amount_cents": 400}
+    ],
+    "total_cents": 2400
+  }
+}
