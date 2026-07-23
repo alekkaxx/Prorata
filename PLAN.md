@@ -76,7 +76,7 @@ arnur-interview-task/          # пакет prorata
 │       └── add-rule/SKILL.md  # ритуал «добавить правило биллинга» (конвейер §6)
 ├── specs/                     # NN-<rule>.md — спека каждого правила ДО кода
 ├── golden/                    # NN-<scenario>.json — вход-события + эталонный инвойс
-├── money.go period.go event.go invoice.go engine.go   # ядро
+├── money.go period.go plan.go event.go invoice.go engine.go   # ядро
 ├── rule_charge.go rule_prorate.go rule_promo.go ...   # по правилу на файл
 ├── *_test.go + property_test.go                       # pgregory.net/rapid для property
 └── Makefile                   # check = build + vet + test (+ golden)
