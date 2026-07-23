@@ -79,6 +79,81 @@ func TestPercentProperty(t *testing.T) {
 	})
 }
 
+// TestProrateCreditNeverExceedsPaid verifies the upgrade invariant from
+// specs/02-prorate-upgrade.md D1 on arbitrary upgrade dates: for any
+// subscribe-then-upgrade history, the credited remainder of the old plan is
+// never positive and its magnitude never exceeds what was actually paid for
+// the old plan, and the invoice total always equals the sum of its lines.
+func TestProrateCreditNeverExceedsPaid(t *testing.T) {
+	rapid.Check(t, func(t *rapid.T) {
+		oldPrice := Money(rapid.Int64Range(0, 10_000_00).Draw(t, "oldPrice"))
+		newPrice := Money(rapid.Int64Range(0, 10_000_00).Draw(t, "newPrice"))
+		oldIv := IntervalMonth
+		if rapid.Bool().Draw(t, "oldYearly") {
+			oldIv = IntervalYear
+		}
+		newIv := IntervalMonth
+		if rapid.Bool().Draw(t, "newYearly") {
+			newIv = IntervalYear
+		}
+		catalog := Catalog{
+			"old": {ID: "old", Price: oldPrice, Interval: oldIv, Currency: "USD"},
+			"new": {ID: "new", Price: newPrice, Interval: newIv, Currency: "USD"},
+		}
+
+		subscribeAt := time.Date(
+			rapid.IntRange(2020, 2030).Draw(t, "year"),
+			time.Month(rapid.IntRange(1, 12).Draw(t, "month")),
+			rapid.IntRange(1, 28).Draw(t, "day"),
+			0, 0, 0, 0, time.UTC,
+		)
+		// The upgrade lands a whole number of days at or after subscribe,
+		// including well past the old period's end where the remainder clamps
+		// to zero and the credit vanishes.
+		upgradeAt := subscribeAt.AddDate(0, 0, rapid.IntRange(0, 800).Draw(t, "offsetDays"))
+
+		events := []Event{
+			{At: subscribeAt, Type: EventSubscribe, PlanID: "old"},
+			{At: upgradeAt, Type: EventUpgrade, PlanID: "new"},
+		}
+		period := Period{
+			Start: time.Date(2019, 1, 1, 0, 0, 0, 0, time.UTC),
+			End:   time.Date(2035, 1, 1, 0, 0, 0, 0, time.UTC),
+		}
+
+		inv, err := Compute(catalog, events, period)
+		if err != nil {
+			t.Fatalf("Compute error: %v", err)
+		}
+
+		var credit Money
+		found := false
+		for _, ln := range inv.Lines {
+			if ln.RuleID == ruleProrateCredit {
+				credit = ln.Amount
+				found = true
+			}
+		}
+		if !found {
+			t.Fatalf("no prorate.credit line in invoice")
+		}
+		if credit > 0 {
+			t.Fatalf("credit %d is positive, want <= 0", credit)
+		}
+		if -credit > oldPrice {
+			t.Fatalf("credit magnitude %d exceeds paid %d", -credit, oldPrice)
+		}
+
+		var sum Money
+		for _, ln := range inv.Lines {
+			sum += ln.Amount
+		}
+		if sum != inv.Total {
+			t.Fatalf("sum of lines %d != invoice total %d", sum, inv.Total)
+		}
+	})
+}
+
 // TestAddIntervalProperty verifies the calendar-clamp decision from
 // specs/00-core.md D3: the anchor day never grows, the result is always
 // strictly later, and adding a month lands in the next calendar month.
