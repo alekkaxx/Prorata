@@ -11,6 +11,10 @@ type EventType string
 const (
 	// EventSubscribe starts a subscription on a plan.
 	EventSubscribe EventType = "subscribe"
+	// EventUpgrade switches an active subscription to a new plan mid-period,
+	// crediting the unused remainder of the current plan and charging the new
+	// plan in full (see specs/02-prorate-upgrade.md).
+	EventUpgrade EventType = "upgrade"
 )
 
 // Event is a single subscription lifecycle event. Events are fed to Compute
