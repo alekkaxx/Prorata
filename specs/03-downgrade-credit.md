@@ -444,3 +444,45 @@ pro-month 15 марта — уже после конца старого пери
 ---
 
 ## Gate
+
+**2026-07-23 — PASS** (architect).
+
+Сверка `rule_downgrade.go` (cda642d) со спекой:
+
+- **Банкование остатка (D2):** `st.paid.Allocate([used, rem])`, банкуется
+  `parts[1]` — вторая доля (rem), дословно как в `rule_prorate.go`. `rem =
+  max(Days([ev.At, oldPeriodEnd]), 0)`, `used = total - rem`. Формула наибольших
+  остатков не теряет копейку (`Σ parts == st.paid`), банк `parts[1] ≤ st.paid`
+  по построению. Кламп после истечения (Пример 5) даёт `rem = 0` → банк 0.
+- **Нет дубля `credit.applied`:** правило возвращает ровно одну строку
+  `downgrade.charge`; списание баланса делает только ядро (`applyCredit`),
+  правило его не трогает. D3 соблюдён.
+- **Строка `downgrade.charge`:** RuleID, `+newPlan.Price`, описание
+  `<id>: full period <ev.At> to <newEnd>` в UTC `2006-01-02` — совпадает с
+  таблицей формата и golden-примерами 1–5.
+- **Ошибки:** три ветки (`no active subscription` / `unknown plan %q` /
+  `already on plan %q`) дословно как в краевых кейсах.
+- **State (D4):** `plan/periodStart/periodEnd/paid` перезаписаны на новый план,
+  `paid = newPlan.Price`; `creditBalance` накопительный, отдельно от `paid`.
+
+Инварианты CLAUDE.md:
+
+- **Кредит ≤ уплаченного** — держится на уровне леджера. Банк ≤ `st.paid`
+  (доля от реально уплаченного), применение `applied = min(net, balance)` ⇒
+  `balance ≥ 0` всегда ⇒ `Σ applied ≤ Σ banked ≤ Σ paid`. Цепочка
+  subscribe→downgrade→upgrade (Пример 4): `Σ credit.applied = 2000 + 44422 =
+  46422 = Σ banked ≤ 48000 = Σ paid`. Проверено новым property-тестом
+  `TestCreditLedgerNeverOverdraws` на случайных цепочках.
+- **Идемпотентность** — правило и ядро чисты, свёртка `[]Event` детерминирована,
+  форматирование дат фиксировано. Байт-в-байт воспроизводимо.
+- **Total == Σ строк** — ядро суммирует `inv.Lines`; банкование строк не рождает,
+  деньги не создаются/не исчезают (Allocate сохраняет сумму).
+- **Каждая строка с RuleID и объяснением** — `downgrade.charge` и `credit.applied`
+  оба несут непустые RuleID/Description; ядро отбраковывает пустые.
+
+Диффскоуп: builder (cda642d) добавил только `rule_downgrade.go` (+65), ядро не
+трогал. `make check` зелёный.
+
+Гейт-действия architect: добавлен property-тест кредитного леджера
+(`test(03-downgrade-credit)`, 1e509c3); в `engine.go` `applyCredit` свёрнут в
+builtin `min` (косметика в моём файле, поведение не меняется).

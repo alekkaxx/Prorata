@@ -117,10 +117,7 @@ func applyCredit(st *state, lines []Line) []Line {
 	if net <= 0 {
 		return lines
 	}
-	applied := net
-	if applied > st.creditBalance {
-		applied = st.creditBalance
-	}
+	applied := min(net, st.creditBalance)
 	st.creditBalance -= applied
 	return append(lines, Line{
 		RuleID:      ruleCreditApplied,
