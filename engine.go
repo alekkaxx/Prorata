@@ -41,6 +41,13 @@ type state struct {
 	// produces a positive charge. It carries no discount once burned
 	// (see specs/04-promo-percent.md).
 	promo pendingPromo
+	// vatBps is the standing value-added-tax rate in basis points (10000 ==
+	// 100%) armed by an EventSetVAT event. Unlike promo it is not one-shot: it
+	// persists and the engine (applyVAT) taxes the net charge of every
+	// subsequent event while it is > 0. It defaults to 0, so an event history
+	// with no EventSetVAT adds no VAT and leaves pre-VAT invoices byte-identical
+	// (see specs/09-vat.md).
+	vatBps int64
 }
 
 // promoKind distinguishes the two one-shot promo flavors a pendingPromo can
@@ -98,6 +105,13 @@ const rulePromoPercent RuleID = "promo.percent"
 // (see specs/05-promo-fixed.md).
 const rulePromoFixed RuleID = "promo.fixed"
 
+// ruleVATStandard is the RuleID for the value-added-tax line the engine adds
+// on top of an event's net charge when a standing VAT rate is armed. Like
+// promo.percent and credit.applied it is produced by the engine (applyVAT),
+// not by an event rule: the rate is core ledger state (state.vatBps), so any
+// charging rule's output is taxed uniformly (see specs/09-vat.md).
+const ruleVATStandard RuleID = "vat.standard"
+
 // ruleFunc applies one event to the subscription state and returns the
 // invoice lines the event produces, if any.
 type ruleFunc func(st *state, c Catalog, ev Event) ([]Line, error)
@@ -145,6 +159,7 @@ func Compute(c Catalog, events []Event, period Period) (Invoice, error) {
 			return Invoice{}, err
 		}
 		lines = applyPromo(st, lines)
+		lines = applyVAT(st, lines)
 		lines = applyCredit(st, lines)
 		if !period.Contains(ev.At) {
 			continue
@@ -251,5 +266,39 @@ func applyPromo(st *state, lines []Line) []Line {
 			base.String(),
 		),
 		Amount: -applied,
+	})
+}
+
+// applyVAT adds value-added tax on top of one event's net charge when a
+// standing VAT rate is armed (state.vatBps > 0). It sums the event's lines as
+// they stand after applyPromo and before applyCredit — that net is the amount
+// actually invoiced for the event: positive charges, less any proration credit
+// (which reverses VAT on the overlapping days) and any promo discount (VAT is
+// due on the discounted price). If that net is positive it appends a single
+// vat.standard line for net.Percent(vatBps), rounded half away from zero per
+// charge, not once over the whole invoice — the per-line vs per-total penny
+// trap this rule exists to pin down (see specs/09-vat.md D2).
+//
+// A net <= 0 event (a standalone credit or refund, a trial, a zero-price plan)
+// produces no VAT line: VAT is added to positive charges only, and standalone
+// credits do not reverse it (out of scope, see specs/09-vat.md). Because the
+// rate defaults to 0, a history with no EventSetVAT yields no vat lines and
+// leaves pre-VAT invoices byte-identical. applyVAT runs before applyCredit so
+// the credit balance draws down the tax-inclusive net.
+func applyVAT(st *state, lines []Line) []Line {
+	if st.vatBps <= 0 {
+		return lines
+	}
+	var net Money
+	for _, ln := range lines {
+		net += ln.Amount
+	}
+	if net <= 0 {
+		return lines
+	}
+	return append(lines, Line{
+		RuleID:      ruleVATStandard,
+		Description: fmt.Sprintf("VAT %s%% on %s", formatPercent(st.vatBps), net.String()),
+		Amount:      net.Percent(st.vatBps),
 	})
 }

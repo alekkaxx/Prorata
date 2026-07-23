@@ -52,6 +52,15 @@ const (
 	// Event.At, whereas cancelling without a refund (access kept until period
 	// end, no money) is a separate, future concern (see specs/08-refund.md).
 	EventRefund EventType = "refund"
+	// EventSetVAT arms a standing value-added-tax rate the engine adds on top of
+	// the net charge of every subsequent taxable event. It carries no plan and
+	// produces no invoice line itself; it uses Event.Bps as the rate in basis
+	// points (2000 == 20%, 10000 == 100%), the same scale as a percentage promo.
+	// The rate persists until changed by a later EventSetVAT and is 0 by default,
+	// so an unset rate adds no VAT and leaves pre-VAT invoices byte-identical.
+	// Only charges from this event onward are taxed; earlier charges are never
+	// taxed retroactively (see specs/09-vat.md).
+	EventSetVAT EventType = "set_vat"
 )
 
 // RefundPolicy selects how much of the current period is returned by an
@@ -83,10 +92,12 @@ const (
 // Event is a single subscription lifecycle event. Events are fed to Compute
 // in chronological order; the engine never reorders them.
 //
-// Bps, AmountCents and Code are used only by EventApplyPromo and are omitted
-// from the JSON of every other event type; the other types ignore them. A
-// promo event sets exactly one of Bps (percentage) or AmountCents (fixed); see
-// EventApplyPromo. Policy is used only by EventRefund; see RefundPolicy.
+// Bps, AmountCents and Code are used only by EventApplyPromo and EventSetVAT
+// and are omitted from the JSON of every other event type; the other types
+// ignore them. A promo event sets exactly one of Bps (percentage) or
+// AmountCents (fixed); see EventApplyPromo. EventSetVAT uses Bps alone as the
+// tax rate; see EventSetVAT. Policy is used only by EventRefund; see
+// RefundPolicy.
 type Event struct {
 	At          time.Time    `json:"at"`
 	Type        EventType    `json:"type"`
