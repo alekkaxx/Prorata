@@ -1,0 +1,42 @@
+name: check
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  check:
+    name: build + vet + test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history: the Tier: check below walks the commits of the PR.
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      # The same gate the pipeline requires before every commit (CLAUDE.md):
+      # go build + go vet + go test, including golden fixtures and property tests.
+      - name: make check
+        run: make check
+
+      # The Tier: line records which model tier produced a commit. The commit-msg
+      # hook enforces it locally; this step keeps it honest for anything that
+      # reaches the remote without the hook enabled.
+      - name: Tier trailer on new commits
+        if: github.event_name == 'pull_request'
+        run: |
+          base="${{ github.event.pull_request.base.sha }}"
+          head="${{ github.event.pull_request.head.sha }}"
+          missing=0
+          for sha in $(git rev-list "$base".."$head"); do
+            if ! git log -1 --format=%b "$sha" | grep -q '^Tier:'; then
+              echo "::error::commit $sha has no 'Tier:' line"
+              missing=1
+            fi
+          done
+          exit $missing
