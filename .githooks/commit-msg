@@ -1,0 +1,21 @@
+#!/bin/sh
+# Rejects a commit whose message body lacks the Tier: line.
+#
+# The rule itself lives in CLAUDE.md, where it is context: read and usually
+# followed, but not guaranteed (3 of the first 65 commits missed it). This hook
+# turns the same rule into an enforced check that runs regardless of what the
+# model or the human decides.
+#
+# Enable once per clone: git config core.hooksPath .githooks
+
+if grep -q '^Tier:' "$1"; then
+	exit 0
+fi
+
+echo "commit rejected: message body must carry a 'Tier:' line." >&2
+echo "" >&2
+echo "  Tier: architect | builder | mechanic" >&2
+echo "" >&2
+echo "It records which model tier did the work — the pipeline's audit trail." >&2
+echo "See CLAUDE.md, section 'Коммиты'." >&2
+exit 1
